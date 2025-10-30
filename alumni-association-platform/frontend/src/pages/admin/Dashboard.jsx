@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
+import { adminAPI } from '../../utils/api';
+import socketService from '../../utils/socket';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -15,6 +17,40 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Connect socket for real-time updates
+    const token = localStorage.getItem('token');
+    if (token) {
+      socketService.connect(token);
+
+      const refreshBlogCount = async () => {
+        try {
+          const res = await adminAPI.getAnalytics();
+          const blogCount = res.data?.contentStats?.blogs ?? 0;
+          setAnalytics(prev => ({ ...(prev || {}), totalBlogs: blogCount }));
+        } catch (e) {
+          // ignore transient errors
+        }
+      };
+
+      // Initialize with backend count
+      refreshBlogCount();
+
+      const onCreated = () => refreshBlogCount();
+      const onDeleted = () => refreshBlogCount();
+
+      if (socketService.socket) {
+        socketService.socket.on('blogs:created', onCreated);
+        socketService.socket.on('blogs:deleted', onDeleted);
+      }
+
+      return () => {
+        if (socketService.socket) {
+          socketService.socket.off('blogs:created', onCreated);
+          socketService.socket.off('blogs:deleted', onDeleted);
+        }
+      };
+    }
   }, []);
 
   const fetchDashboardData = async () => {

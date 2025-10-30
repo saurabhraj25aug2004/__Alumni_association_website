@@ -13,7 +13,9 @@ class SocketService {
       return this.socket;
     }
 
-    this.socket = io('http://localhost:5000', {
+    const DEFAULT_SOCKET_PORT = import.meta.env.VITE_API_PORT || 5000;
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || `http://localhost:${DEFAULT_SOCKET_PORT}`;
+    this.socket = io(SOCKET_URL, {
       auth: {
         token
       },
