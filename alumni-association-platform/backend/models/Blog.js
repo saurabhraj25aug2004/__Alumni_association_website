@@ -47,10 +47,7 @@ const blogSchema = new mongoose.Schema({
     default: 'draft'
   },
   publishedAt: {
-    type: Date,
-    required: function() {
-      return this.status === 'published';
-    }
+    type: Date
   },
   readTime: {
     type: Number, // in minutes

@@ -11,8 +11,8 @@ const BlogForm = ({ isEditing = false }) => {
     content: '',
     excerpt: '',
     tags: '',
-    category: 'general',
-    status: 'draft',
+    category: 'career',
+    status: 'published',
     allowComments: true,
   });
   const [imageUrl, setImageUrl] = useState(null);
@@ -38,7 +38,7 @@ const BlogForm = ({ isEditing = false }) => {
         content: blogData.content || '',
         excerpt: blogData.excerpt || '',
         tags: blogData.tags?.join(', ') || '',
-        category: blogData.category || 'general',
+        category: blogData.category || 'career',
         status: blogData.status || 'draft',
         allowComments: blogData.allowComments !== false,
       });
@@ -81,6 +81,7 @@ const BlogForm = ({ isEditing = false }) => {
       submitData.append('category', formData.category);
       submitData.append('status', formData.status);
       submitData.append('allowComments', formData.allowComments);
+      if (imageUrl) submitData.append('imageUrl', imageUrl);
 
       let response;
       if (isEditing) {
@@ -89,7 +90,8 @@ const BlogForm = ({ isEditing = false }) => {
         response = await blogAPI.createBlog(submitData);
       }
 
-      navigate(`/blogs/${response.data._id}`);
+      const blogId = response.data.blog?._id || response.data._id;
+      navigate(`/blogs/${blogId}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save blog');
       console.error('Blog save error:', err);
@@ -215,12 +217,13 @@ const BlogForm = ({ isEditing = false }) => {
                 value={formData.category}
                 onChange={handleChange}
               >
-                <option value="general">General</option>
                 <option value="career">Career</option>
                 <option value="technology">Technology</option>
-                <option value="education">Education</option>
-                <option value="personal">Personal</option>
                 <option value="industry">Industry</option>
+                <option value="alumni-spotlight">Alumni Spotlight</option>
+                <option value="tips">Tips</option>
+                <option value="news">News</option>
+                <option value="other">Other</option>
               </select>
             </div>
 

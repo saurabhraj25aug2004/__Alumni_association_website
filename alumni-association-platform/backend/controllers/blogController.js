@@ -15,7 +15,8 @@ const createBlog = async (req, res) => {
       category,
       status,
       seo,
-      allowComments
+      allowComments,
+      imageUrl
     } = req.body;
 
     // Handle image upload
@@ -25,19 +26,42 @@ const createBlog = async (req, res) => {
         url: req.file.path,
         public_id: req.file.filename
       };
+    } else if (imageUrl) {
+      imageData = {
+        url: imageUrl,
+        public_id: null
+      };
     }
+
+    // Normalize inputs
+    const normalizedTags = Array.isArray(tags)
+      ? tags
+      : (typeof tags === 'string' && tags.trim() !== ''
+          ? tags.split(',').map(t => t.trim()).filter(Boolean)
+          : []);
+    const normalizedAllowComments = typeof allowComments === 'string'
+      ? allowComments === 'true' || allowComments === '1'
+      : Boolean(allowComments);
+
+    // Ensure excerpt exists to satisfy schema requirement
+    const safeExcerpt = (excerpt && excerpt.trim().length > 0)
+      ? excerpt
+      : (content ? content.substring(0, 200) + (content.length > 200 ? '...' : '') : '');
+
+    const publishTimestamp = status === 'published' ? new Date() : undefined;
 
     const blog = await Blog.create({
       title,
       content,
-      excerpt,
+      excerpt: safeExcerpt,
       author: req.user.id,
       imageUrl: imageData,
-      tags,
+      tags: normalizedTags,
       category,
       status,
+      publishedAt: publishTimestamp,
       seo,
-      allowComments
+      allowComments: normalizedAllowComments
     });
 
     const populatedBlog = await Blog.findById(blog._id)
@@ -49,6 +73,9 @@ const createBlog = async (req, res) => {
     });
   } catch (error) {
     console.error('Create blog error:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -134,7 +161,7 @@ const getBlogById = async (req, res) => {
 const updateBlog = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
 
     const blog = await Blog.findById(id);
     if (!blog) {
@@ -144,6 +171,22 @@ const updateBlog = async (req, res) => {
     // Check if user is the blog author
     if (blog.author.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Not authorized to update this blog post' });
+    }
+
+    // Normalize fields
+    if (typeof updateData.tags === 'string') {
+      updateData.tags = updateData.tags
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean);
+    }
+    if (typeof updateData.allowComments === 'string') {
+      updateData.allowComments = updateData.allowComments === 'true' || updateData.allowComments === '1';
+    }
+
+    // Set publishedAt when transitioning to published
+    if (updateData.status === 'published' && !blog.publishedAt) {
+      updateData.publishedAt = new Date();
     }
 
     // Handle image upload
@@ -162,6 +205,16 @@ const updateBlog = async (req, res) => {
         url: req.file.path,
         public_id: req.file.filename
       };
+    } else if (updateData.imageUrl && typeof updateData.imageUrl === 'string') {
+      updateData.imageUrl = {
+        url: updateData.imageUrl,
+        public_id: blog.imageUrl?.public_id || null
+      };
+    }
+
+    // Ensure excerpt exists if it was cleared
+    if (updateData && (updateData.excerpt === '' || updateData.excerpt == null) && updateData.content) {
+      updateData.excerpt = updateData.content.substring(0, 200) + (updateData.content.length > 200 ? '...' : '');
     }
 
     const updatedBlog = await Blog.findByIdAndUpdate(
@@ -176,6 +229,9 @@ const updateBlog = async (req, res) => {
     });
   } catch (error) {
     console.error('Update blog error:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

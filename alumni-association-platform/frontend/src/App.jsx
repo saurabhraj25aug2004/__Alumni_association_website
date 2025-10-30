@@ -30,6 +30,8 @@ import Mentorship from './pages/alumni/Mentorship';
 import JobPortal from './pages/alumni/JobPortal';
 import Workshops from './pages/alumni/Workshops';
 import Blogs from './pages/alumni/Blogs';
+import BlogForm from './components/BlogForm';
+import BlogDetail from './pages/BlogDetail';
 
 // Student Pages
 import StudentDashboard from './pages/student/Dashboard';
@@ -112,6 +114,9 @@ function App() {
                 <Blogs />
               </StudentAndAdminRoute>
             } />
+            <Route path="/blogs/new" element={<AlumniRoute><BlogForm /></AlumniRoute>} />
+            <Route path="/blogs/:id/edit" element={<AlumniRoute><BlogForm isEditing /></AlumniRoute>} />
+            <Route path="/blogs/:id" element={<ProtectedRoute><BlogDetail /></ProtectedRoute>} />
 
             {/* Default redirect */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

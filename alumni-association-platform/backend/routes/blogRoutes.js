@@ -21,7 +21,6 @@ const { uploadSingle } = require('../middlewares/upload');
 router.get('/', getAllBlogs);
 router.get('/featured', getFeaturedBlogs);
 router.get('/search', searchBlogs);
-router.get('/:id', getBlogById);
 
 // Protected routes
 router.use(protect);
@@ -37,5 +36,8 @@ router.post('/:id/like', toggleLike);
 router.post('/:id/comments', addComment);
 router.post('/:id/comments/:commentId/replies', addReply);
 router.put('/:id/comments/:commentId', updateComment);
+
+// Public route with param should be last to avoid shadowing specific paths
+router.get('/:id', getBlogById);
 
 module.exports = router;

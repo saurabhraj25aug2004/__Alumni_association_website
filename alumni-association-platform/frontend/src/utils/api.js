@@ -1,8 +1,13 @@
 import axios from 'axios';
 
+// Resolve API base URL from env with sensible fallback
+const DEFAULT_API_PORT = import.meta.env.VITE_API_PORT || 5000;
+const ENV_API_URL = import.meta.env.VITE_API_URL;
+const apiBaseUrl = ENV_API_URL || `http://localhost:${DEFAULT_API_PORT}/api`;
+
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -153,10 +158,14 @@ export const blogAPI = {
   getBlogById: (blogId) => api.get(`/blogs/${blogId}`),
   
   // Create blog (alumni only)
-  createBlog: (formData) => api.post('/blogs', formData),
+  createBlog: (formData) => api.post('/blogs', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   
   // Update blog (blog author only)
-  updateBlog: (blogId, formData) => api.put(`/blogs/${blogId}`, formData),
+  updateBlog: (blogId, formData) => api.put(`/blogs/${blogId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   
   // Delete blog (blog author only)
   deleteBlog: (blogId) => api.delete(`/blogs/${blogId}`),
