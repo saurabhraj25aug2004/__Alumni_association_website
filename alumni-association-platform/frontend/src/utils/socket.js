@@ -144,6 +144,31 @@ class SocketService {
   getConnectionStatus() {
     return this.isConnected;
   }
+
+  // Generic entity event subscriptions
+  onEntityCreated(entity, callback) {
+    if (this.socket) {
+      const event = `${entity}:created`;
+      this.socket.on(event, callback);
+      this.listeners.set(event, callback);
+    }
+  }
+
+  onEntityUpdated(entity, callback) {
+    if (this.socket) {
+      const event = `${entity}:updated`;
+      this.socket.on(event, callback);
+      this.listeners.set(event, callback);
+    }
+  }
+
+  onEntityDeleted(entity, callback) {
+    if (this.socket) {
+      const event = `${entity}:deleted`;
+      this.socket.on(event, callback);
+      this.listeners.set(event, callback);
+    }
+  }
 }
 
 // Create singleton instance

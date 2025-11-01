@@ -6,32 +6,139 @@ const User = require('../models/User');
 // @access  Private (Alumni only)
 const createWorkshop = async (req, res) => {
   try {
-    const {
-      topic,
-      description,
-      date,
-      duration,
-      location,
-      capacity,
-      category,
-      tags,
-      materials,
-      registrationDeadline
-    } = req.body;
+    // Safely extract data from req.body (works with both JSON and FormData)
+    const body = req.body || {};
+    
+    // Map form field names to model field names
+    const topic = body.title || body.topic;
+    const description = body.description;
+    const date = body.date;
+    const duration = body.duration;
+    const capacity = body.maxAttendees || body.capacity;
+    const category = body.category;
 
-    const workshop = await Workshop.create({
+    // Validation - Check required fields
+    if (!topic || !description || !date || !duration || !capacity || !category) {
+      return res.status(400).json({ 
+        message: 'Missing required fields: topic, description, date, duration, capacity, and category are required' 
+      });
+    }
+
+    // Parse duration from hours to minutes if it's a string
+    const durationInMinutes = typeof duration === 'string' ? parseFloat(duration) * 60 : parseInt(duration);
+    
+    // Validate duration is a valid number
+    if (isNaN(durationInMinutes) || durationInMinutes < 15 || durationInMinutes > 480) {
+      return res.status(400).json({ 
+        message: 'Duration must be between 15 and 480 minutes' 
+      });
+    }
+
+    // Validate capacity is a valid number
+    const capacityNumber = parseInt(capacity);
+    if (isNaN(capacityNumber) || capacityNumber < 1) {
+      return res.status(400).json({ 
+        message: 'Capacity must be a positive number' 
+      });
+    }
+
+    // Build location object from form data
+    // Form sends: isOnline (boolean), location (string), meetingLink (string)
+    // Model expects: location: { type: 'online'|'in-person'|'hybrid', address?, onlineLink? }
+    let locationObj;
+    const isOnline = body.isOnline === true || body.isOnline === 'true';
+    const meetingLink = body.meetingLink;
+    const locationAddress = body.location;
+
+    if (isOnline) {
+      if (!meetingLink) {
+        return res.status(400).json({ 
+          message: 'Meeting link is required for online workshops' 
+        });
+      }
+      locationObj = {
+        type: 'online',
+        onlineLink: meetingLink
+      };
+    } else {
+      if (!locationAddress) {
+        return res.status(400).json({ 
+          message: 'Location address is required for in-person workshops' 
+        });
+      }
+      locationObj = {
+        type: 'in-person',
+        address: locationAddress
+      };
+    }
+
+    // Combine date and time if provided
+    let workshopDate = date;
+    if (body.time && typeof date === 'string') {
+      // Combine date and time strings
+      workshopDate = `${date}T${body.time}`;
+    }
+
+    // Parse tags if it's a string
+    let tagsArray = [];
+    if (body.tags) {
+      if (typeof body.tags === 'string') {
+        tagsArray = body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      } else if (Array.isArray(body.tags)) {
+        tagsArray = body.tags;
+      }
+    }
+
+    // Build workshop object
+    const workshopData = {
       topic,
       description,
       host: req.user.id,
-      date,
-      duration,
-      location,
-      capacity,
+      date: workshopDate,
+      duration: durationInMinutes,
+      location: locationObj,
+      capacity: capacityNumber,
       category,
-      tags,
-      materials,
-      registrationDeadline
-    });
+      tags: tagsArray
+    };
+
+    // Add optional fields if provided
+    if (body.registrationDeadline) {
+      workshopData.registrationDeadline = body.registrationDeadline;
+    }
+    // HANDLE MATERIALS: Model expects array of objects, but form may send plain text
+    // Only add materials if it's valid JSON array format
+    if (body.materials) {
+      if (typeof body.materials === 'string') {
+        const trimmed = body.materials.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          // It's a JSON array string, parse it
+          try {
+            workshopData.materials = JSON.parse(body.materials);
+          } catch (parseError) {
+            console.warn('Failed to parse materials array, skipping:', parseError.message);
+            // Don't add materials if parsing fails
+          }
+        } else if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          // Single object wrapped in JSON, wrap in array
+          try {
+            const parsed = JSON.parse(body.materials);
+            workshopData.materials = [parsed];
+          } catch (parseError) {
+            console.warn('Failed to parse materials object, skipping:', parseError.message);
+          }
+        }
+        // If it's plain text, don't add materials (model validation would fail anyway)
+      } else if (Array.isArray(body.materials)) {
+        // Already an array, use as-is
+        workshopData.materials = body.materials;
+      } else if (typeof body.materials === 'object') {
+        // Single object, wrap in array
+        workshopData.materials = [body.materials];
+      }
+    }
+
+    const workshop = await Workshop.create(workshopData);
 
     const populatedWorkshop = await Workshop.findById(workshop._id)
       .populate('host', 'name email');
@@ -42,6 +149,16 @@ const createWorkshop = async (req, res) => {
     });
   } catch (error) {
     console.error('Create workshop error:', error);
+    
+    // Handle validation errors from Mongoose
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors 
+      });
+    }
+    
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -123,7 +240,7 @@ const getWorkshopById = async (req, res) => {
 const updateWorkshop = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const body = req.body || {};
 
     const workshop = await Workshop.findById(id);
     if (!workshop) {
@@ -133,6 +250,111 @@ const updateWorkshop = async (req, res) => {
     // Check if user is the workshop host
     if (workshop.host.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Not authorized to update this workshop' });
+    }
+
+    // Build update data, preserving existing values when not provided
+    const updateData = {};
+
+    // Map form fields to model fields
+    if (body.title !== undefined || body.topic !== undefined) {
+      updateData.topic = body.title || body.topic;
+    }
+    if (body.description !== undefined) {
+      updateData.description = body.description;
+    }
+    if (body.date !== undefined) {
+      updateData.date = body.date;
+    }
+    if (body.duration !== undefined) {
+      // Convert hours to minutes
+      const durationInMinutes = typeof body.duration === 'string' ? parseFloat(body.duration) * 60 : parseInt(body.duration);
+      
+      // Validate duration
+      if (isNaN(durationInMinutes) || durationInMinutes < 15 || durationInMinutes > 480) {
+        return res.status(400).json({ 
+          message: 'Duration must be between 15 and 480 minutes' 
+        });
+      }
+      updateData.duration = durationInMinutes;
+    }
+    if (body.maxAttendees !== undefined || body.capacity !== undefined) {
+      const capacityNumber = parseInt(body.maxAttendees || body.capacity);
+      if (isNaN(capacityNumber) || capacityNumber < 1) {
+        return res.status(400).json({ 
+          message: 'Capacity must be a positive number' 
+        });
+      }
+      updateData.capacity = capacityNumber;
+    }
+    if (body.category !== undefined) {
+      updateData.category = body.category;
+    }
+
+    // Handle location - build object from form data
+    // Only update location if any location-related field is provided
+    if (body.isOnline !== undefined || body.location !== undefined || body.meetingLink !== undefined) {
+      const isOnline = body.isOnline === true || body.isOnline === 'true';
+      const meetingLink = body.meetingLink;
+      const locationAddress = body.location;
+
+      // Determine location type if isOnline is provided, otherwise preserve existing
+      let locationType = isOnline ? 'online' : 'in-person';
+      if (body.isOnline === undefined && workshop.location?.type) {
+        locationType = workshop.location.type;
+      }
+
+      if (locationType === 'online') {
+        updateData.location = {
+          type: 'online',
+          onlineLink: meetingLink || workshop.location?.onlineLink
+        };
+      } else if (locationType === 'hybrid') {
+        // Handle hybrid location - requires both address and onlineLink
+        updateData.location = {
+          type: 'hybrid',
+          address: locationAddress || workshop.location?.address,
+          onlineLink: meetingLink || workshop.location?.onlineLink
+        };
+      } else {
+        updateData.location = {
+          type: 'in-person',
+          address: locationAddress || workshop.location?.address
+        };
+      }
+    }
+
+    // Handle date + time combination
+    if (body.time && body.date) {
+      updateData.date = `${body.date}T${body.time}`;
+    }
+
+    // Handle tags if provided
+    if (body.tags !== undefined) {
+      if (typeof body.tags === 'string') {
+        updateData.tags = body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      } else if (Array.isArray(body.tags)) {
+        updateData.tags = body.tags;
+      }
+    }
+
+    // Handle optional fields
+    if (body.registrationDeadline !== undefined) {
+      updateData.registrationDeadline = body.registrationDeadline;
+    }
+    if (body.materials !== undefined) {
+      // SAFE JSON PARSE: Only parse if it looks like JSON
+      if (typeof body.materials === 'string') {
+        const trimmed = body.materials.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          try {
+            updateData.materials = JSON.parse(body.materials);
+          } catch (parseError) {
+            console.warn('Failed to parse materials array, skipping:', parseError.message);
+          }
+        }
+      } else if (Array.isArray(body.materials)) {
+        updateData.materials = body.materials;
+      }
     }
 
     const updatedWorkshop = await Workshop.findByIdAndUpdate(
@@ -147,6 +369,16 @@ const updateWorkshop = async (req, res) => {
     });
   } catch (error) {
     console.error('Update workshop error:', error);
+    
+    // Handle validation errors from Mongoose
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors 
+      });
+    }
+    
     res.status(500).json({ message: 'Server error' });
   }
 };

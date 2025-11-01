@@ -1,38 +1,42 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { feedbackAPI } from '../../utils/api';
+import socketService from '../../utils/socket';
+import useAuthStore from '../../store/authStore';
 
 const Feedback = () => {
-  const feedbacks = [
-    {
-      id: 1,
-      user: 'John Doe',
-      email: 'john@example.com',
-      subject: 'Alumni Meet Experience',
-      message: 'The alumni meet was fantastic! Great networking opportunities and well-organized event.',
-      rating: 5,
-      status: 'New',
-      date: '2024-11-15'
-    },
-    {
-      id: 2,
-      user: 'Jane Smith',
-      email: 'jane@example.com',
-      subject: 'Website Improvement',
-      message: 'The website could use some improvements in the mobile interface. Navigation is a bit difficult on smaller screens.',
-      rating: 3,
-      status: 'In Progress',
-      date: '2024-11-12'
-    },
-    {
-      id: 3,
-      user: 'Bob Johnson',
-      email: 'bob@example.com',
-      subject: 'Mentorship Program',
-      message: 'I would love to participate in the mentorship program. How can I get involved?',
-      rating: 4,
-      status: 'Resolved',
-      date: '2024-11-10'
-    },
-  ];
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await feedbackAPI.getAllFeedback();
+      setFeedbacks(res.data?.feedback || res.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load feedback');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const { token } = useAuthStore();
+
+  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    socketService.connect(token);
+    const refresh = () => load();
+    socketService.onEntityCreated('feedback', refresh);
+    socketService.onEntityUpdated('feedback', refresh);
+    socketService.onEntityDeleted('feedback', refresh);
+    return () => {
+      socketService.removeListener('feedback:created');
+      socketService.removeListener('feedback:updated');
+      socketService.removeListener('feedback:deleted');
+    };
+  }, [token]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -60,6 +64,25 @@ const Feedback = () => {
     ));
   };
 
+  const markResolved = async (id) => {
+    try {
+      await feedbackAPI.updateFeedbackStatus(id, 'resolved');
+      await load();
+    } catch (err) {
+      alert('Failed to update status');
+    }
+  };
+
+  const deleteFeedback = async (id) => {
+    if (!confirm('Delete this feedback?')) return;
+    try {
+      await feedbackAPI.deleteFeedback(id);
+      setFeedbacks(prev => prev.filter(f => f._id !== id));
+    } catch (err) {
+      alert('Failed to delete');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -68,27 +91,35 @@ const Feedback = () => {
           <p className="text-gray-600 mt-2">Review and manage user feedback</p>
         </div>
 
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">{error}</div>
+        )}
+
         <div className="grid gap-6">
-          {feedbacks.map((feedback) => (
-            <div key={feedback.id} className="bg-white rounded-lg shadow p-6">
+          {loading ? (
+            <div className="text-gray-500">Loading...</div>
+          ) : feedbacks.length === 0 ? (
+            <div className="text-gray-500">No feedback yet</div>
+          ) : feedbacks.map((feedback) => (
+            <div key={feedback._id} className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">{feedback.subject}</h3>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(feedback.status)}`}>
+                    <h3 className="text-lg font-semibold text-gray-900">{feedback.subject || 'Feedback'}</h3>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(feedback.status || 'New')}`}>
                       {feedback.status}
                     </span>
                   </div>
                   <p className="text-gray-600 mb-3">{feedback.message}</p>
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <span>From: {feedback.user}</span>
-                    <span>Email: {feedback.email}</span>
-                    <span>Date: {feedback.date}</span>
+                    <span>From: {feedback.user?.name || 'User'}</span>
+                    <span>Email: {feedback.user?.email || '-'}</span>
+                    <span>Date: {new Date(feedback.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
                 <div className="ml-4">
                   <div className="flex items-center space-x-1">
-                    {renderStars(feedback.rating)}
+                    {renderStars(feedback.rating || 0)}
                   </div>
                 </div>
               </div>
@@ -97,10 +128,10 @@ const Feedback = () => {
                 <button className="text-blue-600 hover:text-blue-900 text-sm font-medium">
                   Reply
                 </button>
-                <button className="text-green-600 hover:text-green-900 text-sm font-medium">
-                  Mark as Resolved
+                <button onClick={() => markResolved(feedback._id)} className="text-green-600 hover:text-green-900 text-sm font-medium">
+                  Mark Resolved
                 </button>
-                <button className="text-red-600 hover:text-red-900 text-sm font-medium">
+                <button onClick={() => deleteFeedback(feedback._id)} className="text-red-600 hover:text-red-900 text-sm font-medium">
                   Delete
                 </button>
               </div>

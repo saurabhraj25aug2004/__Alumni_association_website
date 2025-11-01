@@ -41,6 +41,9 @@ import StudentJobPortal from './pages/student/JobPortal';
 import StudentWorkshops from './pages/student/Workshops';
 import StudentBlogs from './pages/student/Blogs';
 import StudentFeedback from './pages/student/Feedback';
+import BlogForm from './components/BlogForm';
+import BlogDetail from './pages/BlogDetail';
+import WorkshopForm from './components/WorkshopForm';
 
 function App() {
   const { initializeAuth, isAuthenticated } = useAuthStore();
@@ -87,6 +90,11 @@ function App() {
             <Route path="/alumni/jobs" element={<AlumniRoute><JobPortal /></AlumniRoute>} />
             <Route path="/alumni/workshops" element={<AlumniRoute><Workshops /></AlumniRoute>} />
             <Route path="/alumni/blogs" element={<AlumniRoute><Blogs /></AlumniRoute>} />
+            <Route path="/alumni/blogs/new" element={<AlumniRoute><BlogForm /></AlumniRoute>} />
+            <Route path="/blogs/:id" element={<BlogDetail />} />
+            <Route path="/blogs/:id/edit" element={<AlumniRoute><BlogForm isEditing /></AlumniRoute>} />
+            <Route path="/alumni/workshops/new" element={<AlumniRoute><WorkshopForm /></AlumniRoute>} />
+            <Route path="/workshops/:id/edit" element={<AlumniRoute><WorkshopForm isEditing /></AlumniRoute>} />
 
             {/* Student Routes */}
             <Route path="/student" element={<StudentRoute><Navigate to="/student/dashboard" replace /></StudentRoute>} />

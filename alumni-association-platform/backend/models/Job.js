@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getIO } = require('../utils/io');
 
 const jobSchema = new mongoose.Schema({
   title: {
@@ -100,5 +101,25 @@ jobSchema.virtual('applicantCount').get(function() {
 // Ensure virtual fields are serialized
 jobSchema.set('toJSON', { virtuals: true });
 jobSchema.set('toObject', { virtuals: true });
+
+// Realtime emit hooks (fallback when change streams unavailable)
+jobSchema.post('save', function(doc) {
+  const io = getIO();
+  if (!io) return;
+  const event = this.isNew ? 'jobs:created' : 'jobs:updated';
+  io.emit(event, { job: doc });
+});
+
+jobSchema.post('findOneAndUpdate', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('jobs:updated', { _id: result._id, fullDocument: result });
+});
+
+jobSchema.post('findOneAndDelete', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('jobs:deleted', { _id: result._id });
+});
 
 module.exports = mongoose.model('Job', jobSchema);

@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import { adminAPI } from '../../utils/api';
+<<<<<<< HEAD
 import socketService from '../../utils/socket';
+=======
+>>>>>>> 03b7d11 (workshop page debug done)
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -56,118 +59,42 @@ const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      
-      // Simulate API calls with realistic data
-      const mockAnalytics = {
-        totalUsers: 1247,
-        totalJobs: 89,
-        totalWorkshops: 23,
-        totalBlogs: 156,
-        newUsersThisMonth: 45,
-        activeUsers: 892,
-        pendingApprovals: 12,
-        systemHealth: 'Excellent'
-      };
+      setError(null);
 
-      const mockUsers = [
-        {
-          _id: '1',
-          name: 'John Smith',
-          email: 'john.smith@alumni.com',
-          role: 'alumni',
-          isApproved: true,
-          createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-          profileImage: { url: 'https://via.placeholder.com/40' }
-        },
-        {
-          _id: '2',
-          name: 'Sarah Johnson',
-          email: 'sarah.johnson@student.com',
-          role: 'student',
-          isApproved: true,
-          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-          profileImage: { url: 'https://via.placeholder.com/40' }
-        },
-        {
-          _id: '3',
-          name: 'Michael Chen',
-          email: 'michael.chen@alumni.com',
-          role: 'alumni',
-          isApproved: false,
-          createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-          profileImage: { url: 'https://via.placeholder.com/40' }
-        },
-        {
-          _id: '4',
-          name: 'Emily Davis',
-          email: 'emily.davis@student.com',
-          role: 'student',
-          isApproved: true,
-          createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
-          profileImage: { url: 'https://via.placeholder.com/40' }
-        },
-        {
-          _id: '5',
-          name: 'David Wilson',
-          email: 'david.wilson@alumni.com',
-          role: 'alumni',
-          isApproved: true,
-          createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
-          profileImage: { url: 'https://via.placeholder.com/40' }
-        }
-      ];
+      const [analyticsRes, usersRes] = await Promise.all([
+        adminAPI.getAnalytics(),
+        adminAPI.getAllUsers()
+      ]);
 
-      const mockActivities = [
-        {
-          id: 1,
-          type: 'user_registration',
-          message: 'New user registration: Emily Davis',
-          timestamp: new Date(Date.now() - 30 * 60 * 1000),
-          icon: '👤'
-        },
-        {
-          id: 2,
-          type: 'job_posted',
-          message: 'New job posted: Senior Developer at TechCorp',
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-          icon: '💼'
-        },
-        {
-          id: 3,
-          type: 'workshop_created',
-          message: 'New workshop created: Advanced Web Development',
-          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
-          icon: '🎓'
-        },
-        {
-          id: 4,
-          type: 'system_alert',
-          message: 'System backup completed successfully',
-          timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
-          icon: '🔧'
-        }
-      ];
+      const analyticsData = analyticsRes.data || {};
+      const usersData = usersRes.data?.users || usersRes.data || [];
 
-      const mockAlerts = [
-        {
-          id: 1,
-          type: 'warning',
-          message: '12 pending user approvals require attention',
-          timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000)
-        },
-        {
-          id: 2,
-          type: 'info',
-          message: 'System maintenance scheduled for tomorrow at 2 AM',
-          timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000)
-        }
-      ];
+      setAnalytics({
+        totalUsers: analyticsData?.userStats?.total ?? analyticsData.totalUsers ?? 0,
+        totalJobs: analyticsData?.contentStats?.jobs ?? analyticsData.totalJobs ?? 0,
+        totalWorkshops: analyticsData?.contentStats?.workshops ?? analyticsData.totalWorkshops ?? 0,
+        totalBlogs: analyticsData?.contentStats?.blogs ?? analyticsData.totalBlogs ?? 0,
+        newUsersThisMonth: analyticsData?.monthlyRegistrations?.at?.(-1)?.count ?? analyticsData.newUsersThisMonth ?? 0,
+        activeUsers: analyticsData.activeUsers ?? 0,
+        pendingApprovals: analyticsData?.userStats?.pendingApprovals ?? 0,
+        systemHealth: analyticsData.systemHealth || 'Good'
+      });
 
-      setAnalytics(mockAnalytics);
-      setUsers(mockUsers);
-      setRecentActivities(mockActivities);
-      setSystemAlerts(mockAlerts);
-      
+      setUsers(Array.isArray(usersData) ? usersData : []);
+
+      const activity = [];
+      if (Array.isArray(analyticsData?.recentActivity?.users)) {
+        analyticsData.recentActivity.users.forEach((u, idx) => activity.push({ id: `u-${idx}`, type: 'user_registration', message: `New user: ${u.name}`, timestamp: new Date(u.createdAt || Date.now()), icon: '👤' }));
+      }
+      if (Array.isArray(analyticsData?.recentActivity?.jobs)) {
+        analyticsData.recentActivity.jobs.forEach((j, idx) => activity.push({ id: `j-${idx}`, type: 'job_posted', message: `New job: ${j.title}`, timestamp: new Date(j.createdAt || Date.now()), icon: '💼' }));
+      }
+      if (Array.isArray(analyticsData?.recentActivity?.workshops)) {
+        analyticsData.recentActivity.workshops.forEach((w, idx) => activity.push({ id: `w-${idx}`, type: 'workshop_created', message: `New workshop: ${w.topic || w.title}`, timestamp: new Date(w.createdAt || Date.now()), icon: '🎓' }));
+      }
+      setRecentActivities(activity.slice(0, 10));
+
+      setSystemAlerts([]);
     } catch (err) {
       setError('Failed to load dashboard data');
       console.error('Dashboard data fetch error:', err);
@@ -189,16 +116,22 @@ const AdminDashboard = () => {
     navigate('/admin/feedback');
   };
 
-  const handleApproveUser = (userId) => {
-    // Simulate user approval
-    setUsers(users.map(user => 
-      user._id === userId ? { ...user, isApproved: true } : user
-    ));
+  const handleApproveUser = async (userId) => {
+    try {
+      await adminAPI.approveUser(userId, true);
+      setUsers(prev => prev.map(u => (u._id === userId ? { ...u, isApproved: true } : u)));
+    } catch (err) {
+      alert('Failed to approve user');
+    }
   };
 
-  const handleRejectUser = (userId) => {
-    // Simulate user rejection
-    setUsers(users.filter(user => user._id !== userId));
+  const handleRejectUser = async (userId) => {
+    try {
+      await adminAPI.approveUser(userId, false);
+      setUsers(prev => prev.map(u => (u._id === userId ? { ...u, isApproved: false } : u)));
+    } catch (err) {
+      alert('Failed to set pending');
+    }
   };
 
   // Format timestamp
@@ -398,7 +331,6 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
-        )}
 
         {/* Analytics Cards Fallback */}
         {(!analytics || typeof analytics !== 'object') && (

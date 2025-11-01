@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getIO } = require('../utils/io');
 
 const blogSchema = new mongoose.Schema({
   title: {
@@ -177,5 +178,25 @@ blogSchema.pre('save', function(next) {
 // Ensure virtual fields are serialized
 blogSchema.set('toJSON', { virtuals: true });
 blogSchema.set('toObject', { virtuals: true });
+
+// Realtime emit hooks (fallback when change streams unavailable)
+blogSchema.post('save', function(doc) {
+  const io = getIO();
+  if (!io) return;
+  const event = this.isNew ? 'blogs:created' : 'blogs:updated';
+  io.emit(event, { blog: doc });
+});
+
+blogSchema.post('findOneAndUpdate', async function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('blogs:updated', { _id: result._id, fullDocument: result });
+});
+
+blogSchema.post('findOneAndDelete', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('blogs:deleted', { _id: result._id });
+});
 
 module.exports = mongoose.model('Blog', blogSchema);

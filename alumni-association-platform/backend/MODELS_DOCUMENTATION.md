@@ -117,7 +117,7 @@ const job = new Job({
 | `location` | Object | Yes | Location details |
 | `capacity` | Number | Yes | Maximum attendees |
 | `attendees` | Array | No | Array of attendee objects |
-| `category` | String | Yes | Enum: 'career', 'technical', 'soft-skills', 'networking', 'industry', 'other' |
+| `category` | String | Yes | Enum: 'career', 'technology', 'leadership', 'networking', 'skills', 'industry' |
 | `tags` | [String] | No | Array of tags |
 | `materials` | Array | No | Array of material objects |
 | `isActive` | Boolean | No | Default: true |
@@ -176,7 +176,7 @@ const workshop = new Workshop({
     onlineLink: 'https://zoom.us/j/123456789'
   },
   capacity: 50,
-  category: 'technical',
+  category: 'technology',
   tags: ['JavaScript', 'Programming', 'Web Development'],
   registrationDeadline: new Date('2024-02-14T23:59:59Z')
 });

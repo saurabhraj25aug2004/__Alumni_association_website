@@ -7,7 +7,11 @@ const apiBaseUrl = ENV_API_URL || `http://localhost:${DEFAULT_API_PORT}/api`;
 
 // Create axios instance with base configuration
 const api = axios.create({
+<<<<<<< HEAD
   baseURL: apiBaseUrl,
+=======
+  baseURL: import.meta?.env?.VITE_API_BASE_URL || 'http://localhost:5000/api',
+>>>>>>> 03b7d11 (workshop page debug done)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -20,6 +24,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Remove Content-Type header for FormData to let browser set it with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     return config;
   },
   (error) => {
@@ -76,6 +86,10 @@ export const adminAPI = {
   
   // Get user details
   getUserDetails: (userId) => api.get(`/admin/users/${userId}`),
+  
+  // Approve or reject user
+  approveUser: (userId, isApproved, reason = '') =>
+    api.put(`/admin/users/${userId}/approve`, { isApproved, reason }),
   
   // Delete user
   deleteUser: (userId) => api.delete(`/admin/users/${userId}`),
@@ -264,22 +278,22 @@ export const mentorshipAPI = {
   
   // Send mentorship request
   sendMentorshipRequest: (mentorId, message) =>
-    api.post('/mentorship/requests', { mentorId, message }),
+    api.post('/mentorship/request', { mentorId, message }),
   
   // Respond to mentorship request
   respondToMentorshipRequest: (requestId, response) =>
-    api.put(`/mentorship/requests/${requestId}`, { response }),
+    api.put(`/mentorship/request/${requestId}`, { response }),
   
   // Get mentorship relationships
   getMentorshipRelationships: () => api.get('/mentorship/relationships'),
   
   // Get chat messages
   getChatMessages: (relationshipId) => 
-    api.get(`/mentorship/relationships/${relationshipId}/messages`),
+    api.get(`/mentorship/chat/${relationshipId}`),
   
   // Send chat message
   sendChatMessage: (relationshipId, message) =>
-    api.post(`/mentorship/relationships/${relationshipId}/messages`, { message }),
+    api.post(`/mentorship/chat/${relationshipId}`, { message }),
   
   // Get mentorship stats
   getMentorshipStats: () => api.get('/mentorship/stats'),

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useAuthStore from '../../store/authStore';
+import { authAPI } from '../../utils/api';
 
 const Profile = () => {
   const { user } = useAuthStore();
@@ -10,20 +11,16 @@ const Profile = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
 
   const [profile, setProfile] = useState({
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    graduationYear: 2020,
-    major: 'Computer Science',
-    currentCompany: 'Tech Solutions Inc.',
-    position: 'Senior Software Engineer',
-    location: 'San Francisco, CA',
-    bio: 'Passionate software engineer with 4+ years of experience in full-stack development. Always eager to help current students and fellow alumni.',
-    skills: ['JavaScript', 'React', 'Node.js', 'Python', 'AWS'],
-    socialLinks: {
-      linkedin: 'https://linkedin.com/in/johndoe',
-      github: 'https://github.com/johndoe',
-      twitter: 'https://twitter.com/johndoe'
-    },
+    name: '',
+    email: '',
+    graduationYear: '',
+    major: '',
+    currentCompany: '',
+    position: '',
+    location: '',
+    bio: '',
+    skills: [],
+    socialLinks: { linkedin: '', github: '', twitter: '' },
     profileImage: null
   });
 
@@ -37,16 +34,22 @@ const Profile = () => {
   const fetchProfileData = async () => {
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Use user data from auth store if available
-      if (user) {
-        setProfile(prev => ({
-          ...prev,
-          name: user.name || prev.name,
-          email: user.email || prev.email
-        }));
+      const res = await authAPI.getMe();
+      const u = res.data || user;
+      if (u) {
+        setProfile({
+          name: u.name || '',
+          email: u.email || '',
+          graduationYear: u.graduationYear || '',
+          major: u.major || '',
+          currentCompany: u.currentCompany || '',
+          position: u.position || '',
+          location: u.location || '',
+          bio: u.bio || '',
+          skills: u.skills || [],
+          socialLinks: u.socialLinks || { linkedin: '', github: '', twitter: '' },
+          profileImage: u.profileImage?.url || null
+        });
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -85,36 +88,50 @@ const Profile = () => {
   };
 
   // Handle profile image upload
-  const handleImageUpload = (event) => {
+  const handleImageUpload = async (event) => {
     const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setEditForm(prev => ({
-          ...prev,
-          profileImage: e.target.result
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    // Optimistically preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setEditForm(prev => ({ ...prev, profileImage: e.target.result }));
+    };
+    reader.readAsDataURL(file);
   };
 
   // Save profile changes
   const handleSave = async () => {
     try {
       setSaving(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setProfile(editForm);
+      const formData = new FormData();
+      Object.entries({
+        name: editForm.name,
+        email: editForm.email,
+        graduationYear: editForm.graduationYear,
+        major: editForm.major,
+        currentCompany: editForm.currentCompany,
+        position: editForm.position,
+        location: editForm.location,
+        bio: editForm.bio,
+        skills: (editForm.skills || []).join(',')
+      }).forEach(([k, v]) => formData.append(k, v ?? ''));
+
+      if (typeof editForm.profileImage === 'object' && editForm.profileImage instanceof File) {
+        formData.append('image', editForm.profileImage);
+      }
+
+      const res = await authAPI.updateProfile(formData);
+      const updated = res.data?.user || editForm;
+      setProfile({
+        ...updated,
+        profileImage: updated.profileImage?.url || updated.profileImage || null,
+      });
       setIsEditing(false);
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
-      
-      // Clear message after 3 seconds
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving profile:', error);
-      setMessage({ type: 'error', text: 'Failed to save profile changes' });
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to save profile changes' });
     } finally {
       setSaving(false);
     }

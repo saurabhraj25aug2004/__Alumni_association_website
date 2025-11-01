@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { getIO } = require('../utils/io');
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -89,3 +90,23 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 module.exports = mongoose.model('User', userSchema);
+ 
+// Realtime emit hooks (fallback when change streams unavailable)
+userSchema.post('save', function(doc) {
+  const io = getIO();
+  if (!io) return;
+  const event = this.isNew ? 'users:created' : 'users:updated';
+  io.emit(event, { user: doc });
+});
+
+userSchema.post('findOneAndUpdate', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('users:updated', { _id: result._id, fullDocument: result });
+});
+
+userSchema.post('findOneAndDelete', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('users:deleted', { _id: result._id });
+});

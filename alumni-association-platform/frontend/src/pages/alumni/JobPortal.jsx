@@ -1,47 +1,42 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { jobAPI } from '../../utils/api';
 
 const JobPortal = () => {
-  const jobListings = [
-    {
-      id: 1,
-      title: 'Senior Software Engineer',
-      company: 'Tech Solutions Inc.',
-      location: 'San Francisco, CA',
-      type: 'Full-time',
-      salary: '$120k - $150k',
-      postedBy: 'John Smith (Alumni)',
-      postedDate: '2024-11-15',
-      description: 'Looking for experienced software engineers to join our growing team.'
-    },
-    {
-      id: 2,
-      title: 'Product Manager',
-      company: 'Innovation Labs',
-      location: 'New York, NY',
-      type: 'Full-time',
-      salary: '$100k - $130k',
-      postedBy: 'Sarah Johnson (Alumni)',
-      postedDate: '2024-11-12',
-      description: 'Join our product team to help build amazing user experiences.'
-    }
-  ];
+  const [jobs, setJobs] = useState([]);
+  const [myApplications, setMyApplications] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const myApplications = [
-    {
-      id: 1,
-      jobTitle: 'Frontend Developer',
-      company: 'WebTech Corp',
-      status: 'Under Review',
-      appliedDate: '2024-11-10'
-    },
-    {
-      id: 2,
-      jobTitle: 'Data Scientist',
-      company: 'Analytics Pro',
-      status: 'Interview Scheduled',
-      appliedDate: '2024-11-08'
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [jobsRes, appsRes] = await Promise.all([
+        jobAPI.getAllJobs(),
+        jobAPI.getMyApplications().catch(() => ({ data: [] }))
+      ]);
+      setJobs(jobsRes.data?.jobs || jobsRes.data || []);
+      setMyApplications(appsRes.data?.applications || appsRes.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load jobs');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleApply = async (jobId) => {
+    try {
+      await jobAPI.applyForJob(jobId);
+      await loadData();
+      alert('Applied successfully');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to apply');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -52,46 +47,56 @@ const JobPortal = () => {
         </div>
 
         <div className="mb-6">
-          <button className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
-            Post a Job
+          <button onClick={loadData} className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+            Refresh
           </button>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">{error}</div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Job Listings */}
           <div className="lg:col-span-2">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Available Positions</h2>
             <div className="space-y-4">
-              {jobListings.map((job) => (
-                <div key={job.id} className="bg-white rounded-lg shadow p-6">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{job.title}</h3>
-                      <p className="text-gray-600">{job.company}</p>
+              {loading ? (
+                <div className="text-gray-500">Loading jobs...</div>
+              ) : jobs.length === 0 ? (
+                <div className="text-gray-500">No jobs found</div>
+              ) : (
+                jobs.map((job) => (
+                  <div key={job._id} className="bg-white rounded-lg shadow p-6">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{job.title}</h3>
+                        <p className="text-gray-600">{job.company}</p>
+                      </div>
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                        {job.type}
+                      </span>
                     </div>
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                      {job.type}
-                    </span>
+                    <div className="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-600">
+                      <div>
+                        <span className="font-medium">Location:</span> {job.location}
+                      </div>
+                      <div>
+                        <span className="font-medium">Salary:</span> {job.salary?.min && job.salary?.max ? `${job.salary.min} - ${job.salary.max} ${job.salary.currency || ''}` : '-'}
+                      </div>
+                    </div>
+                    <p className="text-gray-700 mb-4">{job.description}</p>
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm text-gray-500">
+                        Posted by {job.postedBy?.name || 'Unknown'} on {new Date(job.createdAt).toLocaleDateString()}
+                      </div>
+                      <button onClick={() => handleApply(job._id)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        Apply Now
+                      </button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-600">
-                    <div>
-                      <span className="font-medium">Location:</span> {job.location}
-                    </div>
-                    <div>
-                      <span className="font-medium">Salary:</span> {job.salary}
-                    </div>
-                  </div>
-                  <p className="text-gray-700 mb-4">{job.description}</p>
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm text-gray-500">
-                      Posted by {job.postedBy} on {job.postedDate}
-                    </div>
-                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                      Apply Now
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -100,22 +105,28 @@ const JobPortal = () => {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">My Applications</h2>
             <div className="bg-white rounded-lg shadow p-6">
               <div className="space-y-4">
-                {myApplications.map((application) => (
-                  <div key={application.id} className="border-b border-gray-200 pb-4 last:border-b-0">
-                    <h3 className="font-semibold text-gray-900">{application.jobTitle}</h3>
-                    <p className="text-sm text-gray-600">{application.company}</p>
-                    <div className="flex justify-between items-center mt-2">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        application.status === 'Interview Scheduled' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {application.status}
-                      </span>
-                      <span className="text-xs text-gray-500">{application.appliedDate}</span>
+                {loading ? (
+                  <div className="text-gray-500">Loading applications...</div>
+                ) : myApplications.length === 0 ? (
+                  <div className="text-gray-500">No applications yet</div>
+                ) : (
+                  myApplications.map((application) => (
+                    <div key={application._id} className="border-b border-gray-200 pb-4 last:border-b-0">
+                      <h3 className="font-semibold text-gray-900">{application.job?.title}</h3>
+                      <p className="text-sm text-gray-600">{application.job?.company}</p>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          application.status === 'interview' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {application.status}
+                        </span>
+                        <span className="text-xs text-gray-500">{new Date(application.createdAt).toLocaleDateString()}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

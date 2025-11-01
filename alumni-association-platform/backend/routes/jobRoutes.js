@@ -12,25 +12,26 @@ const {
   getMyApplications
 } = require('../controllers/jobController');
 const { protect, alumniAndAdmin, studentAndAdmin } = require('../middlewares/auth');
+const { validateObjectIdParams } = require('../middlewares/validation');
 
 // Public routes
 router.get('/', getAllJobs);
-router.get('/:id', getJobById);
+router.get('/:id', validateObjectIdParams('id'), getJobById);
 
 // Protected routes
 router.use(protect);
 
 // Job management (Alumni only)
 router.post('/', alumniAndAdmin, createJob);
-router.put('/:id', alumniAndAdmin, updateJob);
-router.delete('/:id', alumniAndAdmin, deleteJob);
+router.put('/:id', validateObjectIdParams('id'), alumniAndAdmin, updateJob);
+router.delete('/:id', validateObjectIdParams('id'), alumniAndAdmin, deleteJob);
 router.get('/my-jobs', alumniAndAdmin, getMyJobs);
 
 // Job applications (Students & Alumni)
-router.post('/:id/apply', studentAndAdmin, applyForJob);
+router.post('/:id/apply', validateObjectIdParams('id'), studentAndAdmin, applyForJob);
 router.get('/my-applications', getMyApplications);
 
 // Application management (Job poster only)
-router.put('/:id/applications/:applicationId', updateApplicationStatus);
+router.put('/:id/applications/:applicationId', validateObjectIdParams('id', 'applicationId'), updateApplicationStatus);
 
 module.exports = router;

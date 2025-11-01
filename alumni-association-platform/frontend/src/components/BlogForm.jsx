@@ -12,10 +12,14 @@ const BlogForm = ({ isEditing = false }) => {
     excerpt: '',
     tags: '',
     category: 'career',
+<<<<<<< HEAD
     status: 'published',
+=======
+    status: 'draft',
+>>>>>>> 03b7d11 (workshop page debug done)
     allowComments: true,
   });
-  const [imageUrl, setImageUrl] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [blog, setBlog] = useState(null);
@@ -43,7 +47,7 @@ const BlogForm = ({ isEditing = false }) => {
         allowComments: blogData.allowComments !== false,
       });
       
-      setImageUrl(blogData.imageUrl?.url || null);
+      // No need to set file; preview handled by ImageUpload
     } catch (err) {
       setError('Failed to load blog data');
       console.error('Blog fetch error:', err);
@@ -77,11 +81,24 @@ const BlogForm = ({ isEditing = false }) => {
       submitData.append('title', formData.title);
       submitData.append('content', formData.content);
       submitData.append('excerpt', formData.excerpt);
-      submitData.append('tags', formData.tags);
+      
+      // Convert tags string to array
+      const tagsArray = formData.tags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+      submitData.append('tags', JSON.stringify(tagsArray));
+      
       submitData.append('category', formData.category);
       submitData.append('status', formData.status);
       submitData.append('allowComments', formData.allowComments);
+<<<<<<< HEAD
       if (imageUrl) submitData.append('imageUrl', imageUrl);
+=======
+      if (imageFile) {
+        submitData.append('image', imageFile);
+      }
+>>>>>>> 03b7d11 (workshop page debug done)
 
       let response;
       if (isEditing) {
@@ -90,8 +107,12 @@ const BlogForm = ({ isEditing = false }) => {
         response = await blogAPI.createBlog(submitData);
       }
 
+<<<<<<< HEAD
       const blogId = response.data.blog?._id || response.data._id;
       navigate(`/blogs/${blogId}`);
+=======
+      navigate(`/blogs/${response.data.blog._id}`);
+>>>>>>> 03b7d11 (workshop page debug done)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save blog');
       console.error('Blog save error:', err);
@@ -100,8 +121,8 @@ const BlogForm = ({ isEditing = false }) => {
     }
   };
 
-  const handleImageUpload = (url) => {
-    setImageUrl(url);
+  const handleImageUpload = (fileOrNull) => {
+    setImageFile(fileOrNull);
   };
 
   if (loading && isEditing) {
@@ -179,11 +200,7 @@ const BlogForm = ({ isEditing = false }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Featured Image
               </label>
-              <ImageUpload
-                onImageUpload={handleImageUpload}
-                currentImage={imageUrl}
-                maxSize={5}
-              />
+              <ImageUpload onImageUpload={handleImageUpload} currentImage={blog?.imageUrl?.url} maxSize={5} />
             </div>
 
             {/* Tags */}

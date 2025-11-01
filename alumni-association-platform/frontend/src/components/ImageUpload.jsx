@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { uploadFile } from '../utils/api';
 
 const ImageUpload = ({ 
   onImageUpload, 
@@ -38,28 +37,12 @@ const ImageUpload = ({
     };
     reader.readAsDataURL(file);
 
-    // Upload file
-    uploadImage(file);
-  };
-
-  const uploadImage = async (file) => {
-    try {
-      setIsUploading(true);
-      setError(null);
-
-      const imageUrl = await uploadFile(file);
-      
-      // Call parent callback with the uploaded image URL
-      if (onImageUpload) {
-        onImageUpload(imageUrl);
-      }
-    } catch (err) {
-      setError('Failed to upload image. Please try again.');
-      console.error('Image upload error:', err);
-    } finally {
-      setIsUploading(false);
+    // Pass file up for parent to include in its FormData
+    if (onImageUpload) {
+      onImageUpload(file);
     }
   };
+  
 
   const handleRemoveImage = () => {
     setPreview(null);
@@ -98,7 +81,7 @@ const ImageUpload = ({
         {isUploading ? (
           <div className="space-y-2">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-sm text-blue-600">Uploading image...</p>
+            <p className="text-sm text-blue-600">Processing image...</p>
           </div>
         ) : preview ? (
           <div className="space-y-2">

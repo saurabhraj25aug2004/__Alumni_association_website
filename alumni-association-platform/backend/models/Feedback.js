@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getIO } = require('../utils/io');
 
 const feedbackSchema = new mongoose.Schema({
   user: {
@@ -176,5 +177,25 @@ feedbackSchema.statics.getFeedbackStats = function(eventType = null) {
 // Ensure virtual fields are serialized
 feedbackSchema.set('toJSON', { virtuals: true });
 feedbackSchema.set('toObject', { virtuals: true });
+
+// Realtime emit hooks (fallback when change streams unavailable)
+feedbackSchema.post('save', function(doc) {
+  const io = getIO();
+  if (!io) return;
+  const event = this.isNew ? 'feedback:created' : 'feedback:updated';
+  io.emit(event, { feedback: doc });
+});
+
+feedbackSchema.post('findOneAndUpdate', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('feedback:updated', { _id: result._id, fullDocument: result });
+});
+
+feedbackSchema.post('findOneAndDelete', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('feedback:deleted', { _id: result._id });
+});
 
 module.exports = mongoose.model('Feedback', feedbackSchema);

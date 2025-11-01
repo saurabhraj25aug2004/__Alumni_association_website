@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getIO } = require('../utils/io');
 
 const workshopSchema = new mongoose.Schema({
   topic: {
@@ -35,13 +36,13 @@ const workshopSchema = new mongoose.Schema({
     address: {
       type: String,
       required: function() {
-        return this.location.type === 'in-person' || this.location.type === 'hybrid';
+        return this.location?.type === 'in-person' || this.location?.type === 'hybrid';
       }
     },
     onlineLink: {
       type: String,
       required: function() {
-        return this.location.type === 'online' || this.location.type === 'hybrid';
+        return this.location?.type === 'online' || this.location?.type === 'hybrid';
       }
     }
   },
@@ -79,7 +80,7 @@ const workshopSchema = new mongoose.Schema({
   }],
   category: {
     type: String,
-    enum: ['career', 'technical', 'soft-skills', 'networking', 'industry', 'other'],
+    enum: ['career', 'technology', 'leadership', 'networking', 'skills', 'industry'],
     required: true
   },
   tags: [{
@@ -118,17 +119,21 @@ workshopSchema.index({ topic: 'text', description: 'text', tags: 'text' });
 
 // Virtual for attendee count
 workshopSchema.virtual('attendeeCount').get(function() {
-  return this.attendees.length;
+  return this.attendees?.length || 0;
 });
 
 // Virtual for available spots
 workshopSchema.virtual('availableSpots').get(function() {
-  return Math.max(0, this.capacity - this.attendees.length);
+  const capacity = this.capacity || 0;
+  const attendeeCount = this.attendees?.length || 0;
+  return Math.max(0, capacity - attendeeCount);
 });
 
 // Virtual for registration status
 workshopSchema.virtual('isFull').get(function() {
-  return this.attendees.length >= this.capacity;
+  const capacity = this.capacity || 0;
+  const attendeeCount = this.attendees?.length || 0;
+  return attendeeCount >= capacity;
 });
 
 // Virtual for registration open
@@ -140,5 +145,25 @@ workshopSchema.virtual('registrationOpen').get(function() {
 // Ensure virtual fields are serialized
 workshopSchema.set('toJSON', { virtuals: true });
 workshopSchema.set('toObject', { virtuals: true });
+
+// Realtime emit hooks (fallback when change streams unavailable)
+workshopSchema.post('save', function(doc) {
+  const io = getIO();
+  if (!io) return;
+  const event = this.isNew ? 'workshops:created' : 'workshops:updated';
+  io.emit(event, { workshop: doc });
+});
+
+workshopSchema.post('findOneAndUpdate', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('workshops:updated', { _id: result._id, fullDocument: result });
+});
+
+workshopSchema.post('findOneAndDelete', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('workshops:deleted', { _id: result._id });
+});
 
 module.exports = mongoose.model('Workshop', workshopSchema);

@@ -1,3 +1,15 @@
+const mongoose = require('mongoose');
+
+// Validate one or more ObjectId route params; returns 400 on first invalid
+const validateObjectIdParams = (...paramNames) => (req, res, next) => {
+  for (const name of paramNames) {
+    const value = req.params[name];
+    if (value && !mongoose.Types.ObjectId.isValid(value)) {
+      return res.status(400).json({ message: `Invalid id for parameter: ${name}` });
+    }
+  }
+  next();
+};
 // Validation middleware for authentication requests
 const validateRegister = (req, res, next) => {
   const { name, email, password, role, graduationYear, major } = req.body;
@@ -84,5 +96,6 @@ const validateApproval = (req, res, next) => {
 module.exports = {
   validateRegister,
   validateLogin,
-  validateApproval
+  validateApproval,
+  validateObjectIdParams
 };

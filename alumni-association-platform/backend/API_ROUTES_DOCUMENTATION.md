@@ -239,7 +239,7 @@ Create a new workshop
       "onlineLink": "https://zoom.us/j/123456789"
     },
     "capacity": 50,
-    "category": "technical",
+    "category": "technology",
     "tags": ["JavaScript", "Programming", "Web Development"],
     "materials": [
       {

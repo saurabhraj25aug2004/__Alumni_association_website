@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getIO } = require('../utils/io');
 
 const messageSchema = new mongoose.Schema({
   sender: {
@@ -159,3 +160,23 @@ chatSchema.statics.getUserChats = async function(userId) {
 };
 
 module.exports = mongoose.model('Chat', chatSchema);
+
+// Realtime emit hooks (fallback when change streams unavailable)
+chatSchema.post('save', function(doc) {
+  const io = getIO();
+  if (!io) return;
+  const event = this.isNew ? 'chats:created' : 'chats:updated';
+  io.emit(event, { chat: doc });
+});
+
+chatSchema.post('findOneAndUpdate', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('chats:updated', { _id: result._id, fullDocument: result });
+});
+
+chatSchema.post('findOneAndDelete', function(result) {
+  const io = getIO();
+  if (!io) return;
+  if (result) io.emit('chats:deleted', { _id: result._id });
+});

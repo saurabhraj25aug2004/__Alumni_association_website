@@ -4,6 +4,7 @@ const Job = require('../models/Job');
 const Workshop = require('../models/Workshop');
 const Feedback = require('../models/Feedback');
 const Chat = require('../models/Chat');
+const User = require('../models/User');
 
 // Initialize MongoDB change streams and broadcast via Socket.IO
 function initChangeStreams(io) {
@@ -59,6 +60,7 @@ function initChangeStreams(io) {
     watchers.push(makeWatcher(Workshop, 'workshops', 'workshops', 'workshop'));
     watchers.push(makeWatcher(Feedback, 'feedback', 'feedback', 'feedback'));
     watchers.push(makeWatcher(Chat, 'chats', 'chats', 'chat'));
+    watchers.push(makeWatcher(User, 'users', 'users', 'user'));
 
     // Cleanup on process exit
     const cleanup = async () => {

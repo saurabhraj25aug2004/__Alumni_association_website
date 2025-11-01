@@ -17,9 +17,15 @@ const protect = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    
+
+    // Support tokens that encode either `userId` or `id`
+    const userId = decoded.userId || decoded.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Not authorized, invalid token payload' });
+    }
+
     // Get user from token
-    const user = await User.findById(decoded.userId).select('-password');
+    const user = await User.findById(userId).select('-password');
     if (!user) {
       return res.status(401).json({ message: 'Not authorized, user not found' });
     }

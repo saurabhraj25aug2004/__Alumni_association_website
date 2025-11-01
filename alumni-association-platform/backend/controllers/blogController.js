@@ -19,6 +19,16 @@ const createBlog = async (req, res) => {
       imageUrl
     } = req.body;
 
+    // Parse tags if it's a JSON string
+    let parsedTags = tags;
+    if (typeof tags === 'string') {
+      try {
+        parsedTags = JSON.parse(tags);
+      } catch (error) {
+        parsedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+      }
+    }
+
     // Handle image upload
     let imageData = null;
     if (req.file) {
@@ -56,7 +66,11 @@ const createBlog = async (req, res) => {
       excerpt: safeExcerpt,
       author: req.user.id,
       imageUrl: imageData,
+<<<<<<< HEAD
       tags: normalizedTags,
+=======
+      tags: parsedTags,
+>>>>>>> 03b7d11 (workshop page debug done)
       category,
       status,
       publishedAt: publishTimestamp,
@@ -162,6 +176,15 @@ const updateBlog = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
+
+    // Parse tags if it's a JSON string
+    if (updateData.tags && typeof updateData.tags === 'string') {
+      try {
+        updateData.tags = JSON.parse(updateData.tags);
+      } catch (error) {
+        updateData.tags = updateData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+      }
+    }
 
     const blog = await Blog.findById(id);
     if (!blog) {
