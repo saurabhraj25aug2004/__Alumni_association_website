@@ -12,6 +12,7 @@ const submitFeedback = async (req, res) => {
       eventModel,
       rating,
       comments,
+      message, // Accept 'message' as alias for 'comments'
       category,
       tags,
       isAnonymous,
@@ -19,18 +20,27 @@ const submitFeedback = async (req, res) => {
       attachments
     } = req.body;
 
+    // Validate required fields
+    if (!category) {
+      return res.status(400).json({ message: 'Category is required' });
+    }
+    if (!comments && !message) {
+      return res.status(400).json({ message: 'Message/comment is required' });
+    }
+
     const feedback = await Feedback.create({
-      user: req.user.id,
-      eventType,
+      user: req.user.id || req.user._id,
+      eventType: eventType || 'platform',
       eventId,
       eventModel,
-      rating,
-      comments,
+      rating: rating || 3, // Default rating if not provided
+      comments: comments || message,
       category,
       tags,
-      isAnonymous,
-      isPublic,
-      attachments
+      isAnonymous: isAnonymous || false,
+      isPublic: isPublic || false,
+      attachments,
+      status: 'New' // Set initial status
     });
 
     const populatedFeedback = await Feedback.findById(feedback._id)
@@ -42,7 +52,10 @@ const submitFeedback = async (req, res) => {
     });
   } catch (error) {
     console.error('Submit feedback error:', error);
-    res.status(500).json({ message: 'Server error' });
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -121,11 +134,16 @@ const getFeedbackById = async (req, res) => {
 
 // @desc    Update feedback status
 // @route   PUT /api/feedback/:id/status
+// @route   PATCH /api/feedback/:id
 // @access  Private (Admin only)
 const updateFeedbackStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    if (!status || !['New', 'In Progress', 'Resolved'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be: New, In Progress, or Resolved' });
+    }
 
     const feedback = await Feedback.findById(id);
     if (!feedback) {
@@ -145,7 +163,7 @@ const updateFeedbackStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Update feedback status error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -262,6 +280,48 @@ const getMyFeedback = async (req, res) => {
   }
 };
 
+// @desc    Get feedback by user ID
+// @route   GET /api/feedback/user/:id
+// @access  Private (Owner or Admin)
+const getFeedbackByUserId = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    
+    // Check if user is requesting their own feedback or is admin
+    if (id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized to view this feedback' });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const feedback = await Feedback.find({ user: id })
+      .populate('user', 'name email')
+      .populate('adminResponse.admin', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Feedback.countDocuments({ user: id });
+
+    res.json({
+      feedback,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalFeedback: total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Get feedback by user ID error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 // @desc    Get public feedback
 // @route   GET /api/feedback/public
 // @access  Public
@@ -372,6 +432,39 @@ const getFeedbackStats = async (req, res) => {
   }
 };
 
+// @desc    Get feedback summary (simple stats)
+// @route   GET /api/feedback/summary
+// @access  Private (Admin only)
+const getFeedbackSummary = async (req, res) => {
+  try {
+    const total = await Feedback.countDocuments();
+    const newCount = await Feedback.countDocuments({ status: 'New' });
+    const inProgress = await Feedback.countDocuments({ status: 'In Progress' });
+    const resolved = await Feedback.countDocuments({ status: 'Resolved' });
+    
+    // Also count legacy statuses
+    const pendingCount = await Feedback.countDocuments({ status: 'pending' });
+    const reviewedCount = await Feedback.countDocuments({ status: 'reviewed' });
+    const addressedCount = await Feedback.countDocuments({ status: 'addressed' });
+    const closedCount = await Feedback.countDocuments({ status: 'closed' });
+
+    res.json({
+      total,
+      new: newCount,
+      inProgress,
+      resolved,
+      // Include legacy statuses in total counts
+      pending: pendingCount,
+      reviewed: reviewedCount,
+      addressed: addressedCount,
+      closed: closedCount
+    });
+  } catch (error) {
+    console.error('Get feedback summary error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 // @desc    Delete feedback
 // @route   DELETE /api/feedback/:id
 // @access  Private (Feedback owner or admin)
@@ -406,7 +499,9 @@ module.exports = {
   addAdminResponse,
   markAsHelpful,
   getMyFeedback,
+  getFeedbackByUserId,
   getPublicFeedback,
   getFeedbackStats,
+  getFeedbackSummary,
   deleteFeedback
 };

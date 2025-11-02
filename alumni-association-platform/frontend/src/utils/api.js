@@ -7,11 +7,7 @@ const apiBaseUrl = ENV_API_URL || `http://localhost:${DEFAULT_API_PORT}/api`;
 
 // Create axios instance with base configuration
 const api = axios.create({
-<<<<<<< HEAD
   baseURL: apiBaseUrl,
-=======
-  baseURL: import.meta?.env?.VITE_API_BASE_URL || 'http://localhost:5000/api',
->>>>>>> 03b7d11 (workshop page debug done)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -112,8 +108,10 @@ export const jobAPI = {
   // Delete job (job author only)
   deleteJob: (jobId) => api.delete(`/jobs/${jobId}`),
   
-  // Apply for job (student only)
-  applyForJob: (jobId) => api.post(`/jobs/${jobId}/apply`),
+  // Apply for job (student only) - accepts FormData with resume file
+  applyForJob: (jobId, formData) => api.post(`/jobs/${jobId}/apply`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   
   // Get my jobs (alumni only)
   getMyJobs: () => api.get('/jobs/my-jobs'),
@@ -121,9 +119,49 @@ export const jobAPI = {
   // Get my applications (student only)
   getMyApplications: () => api.get('/jobs/my-applications'),
   
-  // Update application status (job author only)
-  updateApplicationStatus: (jobId, userId, status) =>
-    api.put(`/jobs/${jobId}/applications/${userId}`, { status }),
+  // Get applied jobs (alias for my-applications)
+  getAppliedJobs: () => api.get('/jobs/applied'),
+  
+  // Update application status (job author or admin)
+  updateApplicationStatus: (jobId, applicationId, status) =>
+    api.put(`/jobs/${jobId}/applications/${applicationId}`, { status }),
+  
+  // Admin: Update application status
+  updateApplicationStatusByAdmin: (jobId, applicationId, status) =>
+    api.put(`/jobs/${jobId}/status`, { applicationId, status }),
+};
+
+// Admin API functions for jobs and applications
+export const adminJobAPI = {
+  // Get all jobs for admin
+  getAllJobs: (params = {}) => api.get('/admin/jobs', { params }),
+  
+  // Get all applications for admin
+  getAllApplications: (params = {}) => api.get('/admin/applications', { params }),
+};
+
+// Announcement API functions
+export const announcementAPI = {
+  // Get all announcements (admin sees all, others see published only)
+  getAllAnnouncements: (params = {}) => api.get('/announcements', { params }),
+  
+  // Get published announcements only (for students and alumni)
+  getPublishedAnnouncements: (params = {}) => api.get('/announcements/published', { params }),
+  
+  // Get announcement by ID
+  getAnnouncementById: (id) => api.get(`/announcements/${id}`),
+  
+  // Create announcement (admin only)
+  createAnnouncement: (data) => api.post('/announcements', data),
+  
+  // Update announcement (admin only)
+  updateAnnouncement: (id, data) => api.put(`/announcements/${id}`, data),
+  
+  // Delete announcement (admin only)
+  deleteAnnouncement: (id) => api.delete(`/announcements/${id}`),
+  
+  // Get announcement statistics (admin only)
+  getAnnouncementStats: () => api.get('/announcements/stats'),
 };
 
 // Workshop API functions
@@ -220,19 +258,31 @@ export const feedbackAPI = {
   // Get feedback by ID
   getFeedbackById: (feedbackId) => api.get(`/feedback/${feedbackId}`),
   
-  // Update feedback status (admin only)
+  // Get user's feedback
+  getMyFeedback: (params = {}) => api.get('/feedback/my-feedback', { params }),
+  
+  // Get feedback by user ID
+  getFeedbackByUserId: (userId, params = {}) => api.get(`/feedback/user/${userId}`, { params }),
+  
+  // Get feedback summary (admin only)
+  getFeedbackSummary: () => api.get('/feedback/summary'),
+  
+  // Get feedback stats (admin only)
+  getFeedbackStats: (params = {}) => api.get('/feedback/stats', { params }),
+  
+  // Update feedback status (admin only) - supports both PATCH and PUT
   updateFeedbackStatus: (feedbackId, status) =>
-    api.put(`/feedback/${feedbackId}/status`, { status }),
+    api.patch(`/feedback/${feedbackId}`, { status }),
   
   // Add admin response (admin only)
   addAdminResponse: (feedbackId, response) =>
-    api.put(`/feedback/${feedbackId}/response`, { response }),
+    api.post(`/feedback/${feedbackId}/response`, { response }),
   
   // Mark feedback as helpful
   markAsHelpful: (feedbackId) => api.post(`/feedback/${feedbackId}/helpful`),
   
-  // Get my feedback
-  getMyFeedback: () => api.get('/feedback/my-feedback'),
+  // Delete feedback
+  deleteFeedback: (feedbackId) => api.delete(`/feedback/${feedbackId}`),
   
   // Get public feedback
   getPublicFeedback: () => api.get('/feedback/public'),
@@ -268,35 +318,54 @@ export const chatAPI = {
   markChatAsRead: (chatId) => api.put(`/chat/${chatId}/read`),
 };
 
-// Mentorship API functions
+// Mentorship API functions (Program-based)
 export const mentorshipAPI = {
-  // Get available mentors
-  getAvailableMentors: () => api.get('/mentorship/mentors'),
+  // Get all mentorship programs
+  getAllPrograms: (params = {}) => api.get('/mentorship', { params }),
   
-  // Get mentorship requests
-  getMentorshipRequests: () => api.get('/mentorship/requests'),
+  // Get mentorship program by ID
+  getProgramById: (id) => api.get(`/mentorship/${id}`),
   
-  // Send mentorship request
+  // Create mentorship program (alumni only)
+  createProgram: (data) => api.post('/mentorship', data),
+  
+  // Update mentorship program (alumni only)
+  updateProgram: (id, data) => api.put(`/mentorship/${id}`, data),
+  
+  // Delete mentorship program (alumni only)
+  deleteProgram: (id) => api.delete(`/mentorship/${id}`),
+  
+  // Request to join program (student only)
+  requestMentorship: (programId, message) =>
+    api.post(`/mentorship/request/${programId}`, { message }),
+  
+  // Accept/Reject request (alumni only)
+  respondToRequest: (programId, requestId, status) =>
+    api.put(`/mentorship/request/${programId}/${requestId}`, { status }),
+  
+  // Legacy routes (for backward compatibility)
+  getAvailableMentors: (params = {}) => api.get('/mentorship/mentors', { params }),
+  getMentorshipRequests: (params = {}) => api.get('/mentorship/requests', { params }),
+  getMentorRequests: (params = {}) => api.get('/mentorship/mentor/requests', { params }),
+  getMenteeMentorships: (params = {}) => api.get('/mentorship/mentee/mentorships', { params }),
   sendMentorshipRequest: (mentorId, message) =>
     api.post('/mentorship/request', { mentorId, message }),
-  
-  // Respond to mentorship request
-  respondToMentorshipRequest: (requestId, response) =>
-    api.put(`/mentorship/request/${requestId}`, { response }),
-  
-  // Get mentorship relationships
-  getMentorshipRelationships: () => api.get('/mentorship/relationships'),
-  
-  // Get chat messages
+  respondToMentorshipRequest: (requestId, status, response) =>
+    api.put(`/mentorship/request/${requestId}`, { status, response }),
+  getMentorshipRelationships: (params = {}) => api.get('/mentorship/relationships', { params }),
   getChatMessages: (relationshipId) => 
     api.get(`/mentorship/chat/${relationshipId}`),
-  
-  // Send chat message
   sendChatMessage: (relationshipId, message) =>
     api.post(`/mentorship/chat/${relationshipId}`, { message }),
-  
-  // Get mentorship stats
   getMentorshipStats: () => api.get('/mentorship/stats'),
+};
+
+// Admin API functions for mentorships
+export const adminMentorshipAPI = {
+  // Get all mentorship programs for admin
+  getAllPrograms: (params = {}) => api.get('/mentorship/all', { params }),
+  // Legacy route
+  getAllMentorships: (params = {}) => api.get('/admin/mentorships', { params }),
 };
 
 // File upload helper

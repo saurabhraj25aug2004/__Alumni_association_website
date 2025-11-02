@@ -175,11 +175,21 @@ const deleteJob = async (req, res) => {
 
 // @desc    Apply for a job
 // @route   POST /api/jobs/:id/apply
-// @access  Private (Students & Alumni)
+// @access  Private (Students only)
 const applyForJob = async (req, res) => {
   try {
     const { id } = req.params;
-    const { resume, coverLetter } = req.body;
+    const { coverLetter } = req.body;
+
+    // Ensure only students can apply
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ message: 'Only students can apply for jobs' });
+    }
+
+    // Validate required fields
+    if (!req.file && !coverLetter) {
+      return res.status(400).json({ message: 'Please provide a resume or cover letter' });
+    }
 
     const job = await Job.findById(id);
     if (!job) {
@@ -191,19 +201,36 @@ const applyForJob = async (req, res) => {
     }
 
     // Check if user has already applied
-    const alreadyApplied = job.applicants.find(
-      applicant => applicant.user.toString() === req.user.id
+    const alreadyApplied = (job.applicants || []).find(
+      applicant => applicant.user && applicant.user.toString() === req.user.id.toString()
     );
 
     if (alreadyApplied) {
       return res.status(400).json({ message: 'You have already applied for this job' });
     }
 
-    // Add application
+    // Get user details for the application
+    const applicantName = req.user.name || 'Unknown';
+    const applicantEmail = req.user.email || '';
+
+    // Handle resume file upload
+    let resumeUrl = null;
+    if (req.file && req.file.path) {
+      resumeUrl = req.file.path;
+    }
+
+    // Ensure applicants array exists
+    if (!job.applicants) {
+      job.applicants = [];
+    }
+
+    // Add application with resume URL and user details
     job.applicants.push({
       user: req.user.id,
-      resume,
-      coverLetter
+      resume: resumeUrl,
+      coverLetter: coverLetter || '',
+      status: 'pending',
+      appliedAt: new Date()
     });
 
     await job.save();
@@ -212,35 +239,44 @@ const applyForJob = async (req, res) => {
       .populate('postedBy', 'name email')
       .populate('applicants.user', 'name email');
 
-    res.json({
+    res.status(201).json({
       message: 'Application submitted successfully',
       job: updatedJob
     });
   } catch (error) {
     console.error('Apply for job error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 // @desc    Update application status
 // @route   PUT /api/jobs/:id/applications/:applicationId
-// @access  Private (Job poster only)
+// @access  Private (Job poster or Admin)
 const updateApplicationStatus = async (req, res) => {
   try {
     const { id, applicationId } = req.params;
     const { status } = req.body;
+
+    // Validate status
+    const validStatuses = ['pending', 'reviewed', 'shortlisted', 'rejected', 'accepted', 'hired'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    }
 
     const job = await Job.findById(id);
     if (!job) {
       return res.status(404).json({ message: 'Job not found' });
     }
 
-    // Check if user is the job poster
-    if (job.postedBy.toString() !== req.user.id) {
+    // Check if user is the job poster or admin
+    const isJobPoster = job.postedBy.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isJobPoster && !isAdmin) {
       return res.status(403).json({ message: 'Not authorized to update applications' });
     }
 
-    const application = job.applicants.id(applicationId);
+    const application = (job.applicants || []).id(applicationId);
     if (!application) {
       return res.status(404).json({ message: 'Application not found' });
     }
@@ -258,6 +294,51 @@ const updateApplicationStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Update application status error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Update application status by Admin (alternative route)
+// @route   PUT /api/jobs/:id/status
+// @access  Private (Admin only)
+const updateApplicationStatusByAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { applicationId, status } = req.body;
+
+    if (!applicationId) {
+      return res.status(400).json({ message: 'applicationId is required' });
+    }
+
+    // Validate status
+    const validStatuses = ['pending', 'reviewed', 'shortlisted', 'rejected', 'accepted', 'hired'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const job = await Job.findById(id);
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    const application = (job.applicants || []).id(applicationId);
+    if (!application) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    application.status = status;
+    await job.save();
+
+    const updatedJob = await Job.findById(id)
+      .populate('postedBy', 'name email')
+      .populate('applicants.user', 'name email');
+
+    res.json({
+      message: 'Application status updated successfully',
+      job: updatedJob
+    });
+  } catch (error) {
+    console.error('Update application status by admin error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -298,6 +379,7 @@ const getMyJobs = async (req, res) => {
 
 // @desc    Get user's job applications
 // @route   GET /api/jobs/my-applications
+// @route   GET /api/jobs/applied
 // @access  Private (User)
 const getMyApplications = async (req, res) => {
   try {
@@ -309,16 +391,29 @@ const getMyApplications = async (req, res) => {
       'applicants.user': req.user.id
     })
       .populate('postedBy', 'name email')
+      .populate('applicants.user', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
+
+    // Map jobs to include user's specific application data
+    const applications = jobs.map(job => {
+      const userApplication = (job.applicants || []).find(
+        app => app.user && app.user._id && app.user._id.toString() === req.user.id.toString()
+      );
+      return {
+        ...job.toObject(),
+        applicationStatus: userApplication?.status || 'pending',
+        appliedAt: userApplication?.appliedAt || job.createdAt
+      };
+    });
 
     const total = await Job.countDocuments({
       'applicants.user': req.user.id
     });
 
     res.json({
-      applications: jobs,
+      applications,
       pagination: {
         currentPage: page,
         totalPages: Math.ceil(total / limit),
@@ -333,6 +428,112 @@ const getMyApplications = async (req, res) => {
   }
 };
 
+// @desc    Get all jobs with applications (Admin only)
+// @route   GET /api/admin/jobs
+// @access  Private (Admin only)
+const getAllJobsForAdmin = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const jobs = await Job.find({})
+      .populate('postedBy', 'name email')
+      .populate('applicants.user', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Job.countDocuments({});
+
+    res.json({
+      jobs,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalJobs: total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Get all jobs for admin error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get all applications (Admin only)
+// @route   GET /api/admin/applications
+// @access  Private (Admin only)
+const getAllApplications = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+    const status = req.query.status;
+
+    // Get all jobs and extract applications
+    const filter = {};
+    if (status) {
+      filter['applicants.status'] = status;
+    }
+
+    const jobs = await Job.find(filter)
+      .populate('postedBy', 'name email')
+      .populate('applicants.user', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Flatten applications with job details
+    const applications = [];
+    jobs.forEach(job => {
+      (job.applicants || []).forEach(applicant => {
+        if (!status || applicant.status === status) {
+          applications.push({
+            _id: applicant._id,
+            jobId: job._id,
+            jobTitle: job.title,
+            company: job.company,
+            postedBy: {
+              name: job.postedBy?.name || 'Unknown',
+              email: job.postedBy?.email || ''
+            },
+            applicant: {
+              _id: applicant.user?._id || '',
+              name: applicant.user?.name || 'Unknown',
+              email: applicant.user?.email || ''
+            },
+            resume: applicant.resume || '',
+            coverLetter: applicant.coverLetter || '',
+            status: applicant.status || 'pending',
+            appliedAt: applicant.appliedAt || applicant.createdAt || new Date()
+          });
+        }
+      });
+    });
+
+    // Sort by applied date
+    applications.sort((a, b) => new Date(b.appliedAt) - new Date(a.appliedAt));
+
+    const totalApplications = applications.length;
+
+    res.json({
+      applications,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalApplications / limit),
+        totalApplications: totalApplications,
+        hasNext: page * limit < totalApplications,
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Get all applications error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   createJob,
   getAllJobs,
@@ -341,6 +542,9 @@ module.exports = {
   deleteJob,
   applyForJob,
   updateApplicationStatus,
+  updateApplicationStatusByAdmin,
   getMyJobs,
-  getMyApplications
+  getMyApplications,
+  getAllJobsForAdmin,
+  getAllApplications
 };

@@ -12,11 +12,7 @@ const BlogForm = ({ isEditing = false }) => {
     excerpt: '',
     tags: '',
     category: 'career',
-<<<<<<< HEAD
-    status: 'published',
-=======
     status: 'draft',
->>>>>>> 03b7d11 (workshop page debug done)
     allowComments: true,
   });
   const [imageFile, setImageFile] = useState(null);
@@ -92,27 +88,20 @@ const BlogForm = ({ isEditing = false }) => {
       submitData.append('category', formData.category);
       submitData.append('status', formData.status);
       submitData.append('allowComments', formData.allowComments);
-<<<<<<< HEAD
-      if (imageUrl) submitData.append('imageUrl', imageUrl);
-=======
       if (imageFile) {
         submitData.append('image', imageFile);
       }
->>>>>>> 03b7d11 (workshop page debug done)
 
       let response;
       if (isEditing) {
         response = await blogAPI.updateBlog(id, submitData);
+        alert('Blog post updated successfully!');
+        navigate('/alumni/blogs'); // Navigate back to blogs list after edit
       } else {
         response = await blogAPI.createBlog(submitData);
+        const blogId = response.data.blog?._id || response.data._id;
+        navigate(`/blogs/${blogId}`);
       }
-
-<<<<<<< HEAD
-      const blogId = response.data.blog?._id || response.data._id;
-      navigate(`/blogs/${blogId}`);
-=======
-      navigate(`/blogs/${response.data.blog._id}`);
->>>>>>> 03b7d11 (workshop page debug done)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save blog');
       console.error('Blog save error:', err);

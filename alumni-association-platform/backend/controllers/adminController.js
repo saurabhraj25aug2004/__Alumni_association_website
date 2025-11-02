@@ -3,6 +3,7 @@ const Job = require('../models/Job');
 const Workshop = require('../models/Workshop');
 const Blog = require('../models/Blog');
 const Feedback = require('../models/Feedback');
+const Mentorship = require('../models/Mentorship');
 
 // @desc    Get all users with pagination and filters
 // @route   GET /api/admin/users
@@ -135,7 +136,7 @@ const getAnalytics = async (req, res) => {
         }
       },
       { $sort: { _id: 1 } }
-    ]);
+    ]).catch(() => []); // Return empty array if no feedback
 
     // Monthly user registrations (last 6 months)
     const sixMonthsAgo = new Date();
@@ -157,28 +158,28 @@ const getAnalytics = async (req, res) => {
         }
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } }
-    ]);
+    ]).catch(() => []); // Return empty array if aggregation fails
 
     res.json({
       userStats: {
-        total: totalUsers,
-        alumni: totalAlumni,
-        students: totalStudents,
-        pendingApprovals
+        total: totalUsers || 0,
+        alumni: totalAlumni || 0,
+        students: totalStudents || 0,
+        pendingApprovals: pendingApprovals || 0
       },
       contentStats: {
-        jobs: totalJobs,
-        workshops: totalWorkshops,
-        blogs: totalBlogs,
-        feedback: totalFeedback
+        jobs: totalJobs || 0,
+        workshops: totalWorkshops || 0,
+        blogs: totalBlogs || 0,
+        feedback: totalFeedback || 0
       },
       recentActivity: {
-        users: recentUsers,
-        jobs: recentJobs,
-        workshops: recentWorkshops
+        users: Array.isArray(recentUsers) ? recentUsers : [],
+        jobs: Array.isArray(recentJobs) ? recentJobs : [],
+        workshops: Array.isArray(recentWorkshops) ? recentWorkshops : []
       },
-      feedbackStats,
-      monthlyRegistrations
+      feedbackStats: Array.isArray(feedbackStats) ? feedbackStats : [],
+      monthlyRegistrations: Array.isArray(monthlyRegistrations) ? monthlyRegistrations : []
     });
   } catch (error) {
     console.error('Get analytics error:', error);
@@ -255,10 +256,67 @@ const deleteUser = async (req, res) => {
   }
 };
 
+// @desc    Get all mentorships for admin
+// @route   GET /api/admin/mentorships
+// @access  Private (Admin only)
+const getAllMentorships = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status;
+    const skip = (page - 1) * limit;
+
+    const filter = {};
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+
+    const mentorships = await Mentorship.find(filter)
+      .populate('mentor', 'name email')
+      .populate('mentee', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Mentorship.countDocuments(filter);
+
+    // Format response with mentor and mentee names
+    const formattedMentorships = mentorships.map(mentorship => ({
+      _id: mentorship._id,
+      mentorName: mentorship.mentor?.name || 'Unknown',
+      mentorEmail: mentorship.mentor?.email || '',
+      menteeName: mentorship.mentee?.name || 'Unknown',
+      menteeEmail: mentorship.mentee?.email || '',
+      status: mentorship.status,
+      message: mentorship.message,
+      mentorResponse: mentorship.mentorResponse,
+      requestedAt: mentorship.requestedAt,
+      acceptedAt: mentorship.acceptedAt,
+      completedAt: mentorship.completedAt,
+      createdAt: mentorship.createdAt
+    }));
+
+    res.json({
+      mentorships: formattedMentorships,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalMentorships: total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Get all mentorships error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   getAllUsers,
   approveUser,
   getAnalytics,
   getUserDetails,
-  deleteUser
+  deleteUser,
+  getAllMentorships
 };

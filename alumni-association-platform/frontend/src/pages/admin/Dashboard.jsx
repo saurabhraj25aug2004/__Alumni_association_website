@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
-import { adminAPI } from '../../utils/api';
-<<<<<<< HEAD
+import { adminAPI, adminMentorshipAPI, feedbackAPI } from '../../utils/api';
 import socketService from '../../utils/socket';
-=======
->>>>>>> 03b7d11 (workshop page debug done)
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -17,6 +14,8 @@ const AdminDashboard = () => {
   const [error, setError] = useState(null);
   const [recentActivities, setRecentActivities] = useState([]);
   const [systemAlerts, setSystemAlerts] = useState([]);
+  const [mentorshipStats, setMentorshipStats] = useState(null);
+  const [feedbackSummary, setFeedbackSummary] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -61,9 +60,11 @@ const AdminDashboard = () => {
       setLoading(true);
       setError(null);
 
-      const [analyticsRes, usersRes] = await Promise.all([
+      const [analyticsRes, usersRes, mentorshipRes, feedbackRes] = await Promise.all([
         adminAPI.getAnalytics(),
-        adminAPI.getAllUsers()
+        adminAPI.getAllUsers(),
+        adminMentorshipAPI.getAllPrograms().catch(() => ({ data: { stats: null } })),
+        feedbackAPI.getFeedbackSummary().catch(() => ({ data: null }))
       ]);
 
       const analyticsData = analyticsRes.data || {};
@@ -81,6 +82,16 @@ const AdminDashboard = () => {
       });
 
       setUsers(Array.isArray(usersData) ? usersData : []);
+      
+      // Set mentorship stats
+      if (mentorshipRes.data?.stats) {
+        setMentorshipStats(mentorshipRes.data.stats);
+      }
+      
+      // Set feedback summary
+      if (feedbackRes.data) {
+        setFeedbackSummary(feedbackRes.data);
+      }
 
       const activity = [];
       if (Array.isArray(analyticsData?.recentActivity?.users)) {
@@ -331,6 +342,134 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Mentorship Statistics */}
+        {mentorshipStats && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Mentorship Statistics</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-purple-100 text-purple-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Mentors</p>
+                    <p className="text-2xl font-semibold text-gray-900">{mentorshipStats.totalMentors || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-blue-100 text-blue-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Mentees</p>
+                    <p className="text-2xl font-semibold text-gray-900">{mentorshipStats.totalMentees || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Pending Requests</p>
+                    <p className="text-2xl font-semibold text-gray-900">{mentorshipStats.pendingRequests || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-green-100 text-green-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Programs</p>
+                    <p className="text-2xl font-semibold text-gray-900">{mentorshipStats.totalPrograms || 0}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Feedback Statistics */}
+        {feedbackSummary && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Feedback Statistics</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-blue-100 text-blue-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Feedback</p>
+                    <p className="text-2xl font-semibold text-gray-900">{feedbackSummary.total || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">New</p>
+                    <p className="text-2xl font-semibold text-gray-900">{feedbackSummary.new || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-orange-100 text-orange-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">In Progress</p>
+                    <p className="text-2xl font-semibold text-gray-900">{feedbackSummary.inProgress || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-6 hover:shadow-xl transition-all duration-300">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-full bg-green-100 text-green-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Resolved</p>
+                    <p className="text-2xl font-semibold text-gray-900">{feedbackSummary.resolved || 0}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Analytics Cards Fallback */}
         {(!analytics || typeof analytics !== 'object') && (

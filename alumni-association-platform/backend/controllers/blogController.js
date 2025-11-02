@@ -66,11 +66,7 @@ const createBlog = async (req, res) => {
       excerpt: safeExcerpt,
       author: req.user.id,
       imageUrl: imageData,
-<<<<<<< HEAD
-      tags: normalizedTags,
-=======
       tags: parsedTags,
->>>>>>> 03b7d11 (workshop page debug done)
       category,
       status,
       publishedAt: publishTimestamp,
@@ -192,7 +188,8 @@ const updateBlog = async (req, res) => {
     }
 
     // Check if user is the blog author
-    if (blog.author.toString() !== req.user.id) {
+    const userId = req.user._id || req.user.id;
+    if (blog.author.toString() !== userId.toString()) {
       return res.status(403).json({ message: 'Not authorized to update this blog post' });
     }
 
@@ -272,7 +269,8 @@ const deleteBlog = async (req, res) => {
     }
 
     // Check if user is the blog author
-    if (blog.author.toString() !== req.user.id) {
+    const userId = req.user._id || req.user.id;
+    if (blog.author.toString() !== userId.toString()) {
       return res.status(403).json({ message: 'Not authorized to delete this blog post' });
     }
 
@@ -469,11 +467,17 @@ const updateComment = async (req, res) => {
 const getMyBlogs = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 100; // Increased limit to show all user's blogs
     const status = req.query.status;
     const skip = (page - 1) * limit;
 
-    const filter = { author: req.user.id };
+    // Use both req.user.id and req.user._id for compatibility
+    const userId = req.user._id || req.user.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const filter = { author: userId };
     if (status) filter.status = status;
 
     const blogs = await Blog.find(filter)
@@ -496,7 +500,7 @@ const getMyBlogs = async (req, res) => {
     });
   } catch (error) {
     console.error('Get my blogs error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 

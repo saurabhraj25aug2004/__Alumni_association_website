@@ -41,43 +41,46 @@ const jobSchema = new mongoose.Schema({
       default: 'USD'
     }
   },
-  requirements: [{
-    type: String,
-    trim: true
-  }],
-  skills: [{
-    type: String,
-    trim: true
-  }],
+  requirements: {
+    type: [String],
+    default: []
+  },
+  skills: {
+    type: [String],
+    default: []
+  },
   postedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  applicants: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    appliedAt: {
-      type: Date,
-      default: Date.now
-    },
-    status: {
-      type: String,
-      enum: ['pending', 'reviewed', 'shortlisted', 'rejected', 'hired'],
-      default: 'pending'
-    },
-    resume: {
-      type: String, // URL to resume file
-      required: false
-    },
-    coverLetter: {
-      type: String,
-      required: false
-    }
-  }],
+  applicants: {
+    type: [{
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+      },
+      appliedAt: {
+        type: Date,
+        default: Date.now
+      },
+      status: {
+        type: String,
+        enum: ['pending', 'reviewed', 'shortlisted', 'rejected', 'hired'],
+        default: 'pending'
+      },
+      resume: {
+        type: String, // URL to resume file
+        required: false
+      },
+      coverLetter: {
+        type: String,
+        required: false
+      }
+    }],
+    default: []
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -95,7 +98,7 @@ jobSchema.index({ title: 'text', description: 'text', company: 'text' });
 
 // Virtual for applicant count
 jobSchema.virtual('applicantCount').get(function() {
-  return this.applicants.length;
+  return (this.applicants || []).length;
 });
 
 // Ensure virtual fields are serialized

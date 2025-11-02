@@ -37,8 +37,10 @@ const workshopRoutes = require('./routes/workshopRoutes');
 const blogRoutes = require('./routes/blogRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const mentorshipRoutes = require('./routes/mentorshipRoutes');
+const mentorshipProgramRoutes = require('./routes/mentorshipProgramRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const announcementRoutes = require('./routes/announcementRoutes');
 
 // Basic route
 app.get('/', (req, res) => {
@@ -53,9 +55,11 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/workshops', workshopRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/feedback', feedbackRoutes);
-app.use('/api/mentorship', mentorshipRoutes);
+app.use('/api/mentorship', mentorshipProgramRoutes); // Program-based mentorship routes (main)
+app.use('/api/mentorship', mentorshipRoutes); // Legacy/alternative mentorship routes
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 // Socket.IO authentication middleware
 io.use(async (socket, next) => {
@@ -66,7 +70,8 @@ io.use(async (socket, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
+    const userId = decoded.id || decoded.userId;
+    const user = await User.findById(userId).select('-password');
 
     if (!user) {
       return next(new Error('User not found'));

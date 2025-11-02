@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import { authAPI } from '../../utils/api';
 
 const Profile = () => {
-  const { user } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
   
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -15,12 +17,10 @@ const Profile = () => {
     email: '',
     graduationYear: '',
     major: '',
-    currentCompany: '',
-    position: '',
     location: '',
     bio: '',
-    skills: [],
-    socialLinks: { linkedin: '', github: '', twitter: '' },
+    phone: '',
+    socialLinks: { linkedin: '', github: '', twitter: '', website: '' },
     profileImage: null
   });
 
@@ -28,8 +28,12 @@ const Profile = () => {
 
   // Load profile data
   useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
     fetchProfileData();
-  }, []);
+  }, [isAuthenticated, navigate]);
 
   const fetchProfileData = async () => {
     try {
@@ -42,12 +46,21 @@ const Profile = () => {
           email: u.email || '',
           graduationYear: u.graduationYear || '',
           major: u.major || '',
-          currentCompany: u.currentCompany || '',
-          position: u.position || '',
           location: u.location || '',
           bio: u.bio || '',
-          skills: u.skills || [],
-          socialLinks: u.socialLinks || { linkedin: '', github: '', twitter: '' },
+          phone: u.phone || '',
+          socialLinks: u.socialLinks || { linkedin: '', github: '', twitter: '', website: '' },
+          profileImage: u.profileImage?.url || null
+        });
+        setEditForm({
+          name: u.name || '',
+          email: u.email || '',
+          graduationYear: u.graduationYear || '',
+          major: u.major || '',
+          location: u.location || '',
+          bio: u.bio || '',
+          phone: u.phone || '',
+          socialLinks: u.socialLinks || { linkedin: '', github: '', twitter: '', website: '' },
           profileImage: u.profileImage?.url || null
         });
       }
@@ -67,14 +80,6 @@ const Profile = () => {
     }));
   };
 
-  // Handle skills input
-  const handleSkillsChange = (value) => {
-    const skillsArray = value.split(',').map(skill => skill.trim()).filter(skill => skill);
-    setEditForm(prev => ({
-      ...prev,
-      skills: skillsArray
-    }));
-  };
 
   // Handle social links change
   const handleSocialLinkChange = (platform, value) => {
@@ -91,10 +96,23 @@ const Profile = () => {
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    // Optimistically preview
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'Please select an image file' });
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Image size must be less than 5MB' });
+      return;
+    }
+    
+    // Preview image
     const reader = new FileReader();
     reader.onload = (e) => {
-      setEditForm(prev => ({ ...prev, profileImage: e.target.result }));
+      setEditForm(prev => ({ ...prev, profileImageFile: file, profileImage: e.target.result }));
     };
     reader.readAsDataURL(file);
   };
@@ -103,21 +121,28 @@ const Profile = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
+      setMessage({ type: '', text: '' });
+      
       const formData = new FormData();
-      Object.entries({
-        name: editForm.name,
-        email: editForm.email,
-        graduationYear: editForm.graduationYear,
-        major: editForm.major,
-        currentCompany: editForm.currentCompany,
-        position: editForm.position,
-        location: editForm.location,
-        bio: editForm.bio,
-        skills: (editForm.skills || []).join(',')
-      }).forEach(([k, v]) => formData.append(k, v ?? ''));
+      formData.append('name', editForm.name || '');
+      formData.append('email', editForm.email || '');
+      if (editForm.graduationYear) formData.append('graduationYear', editForm.graduationYear);
+      if (editForm.major) formData.append('major', editForm.major);
+      if (editForm.location) formData.append('location', editForm.location);
+      if (editForm.bio) formData.append('bio', editForm.bio);
+      if (editForm.phone) formData.append('phone', editForm.phone);
+      
+      // Append social links
+      if (editForm.socialLinks) {
+        formData.append('socialLinks[linkedin]', editForm.socialLinks.linkedin || '');
+        formData.append('socialLinks[github]', editForm.socialLinks.github || '');
+        formData.append('socialLinks[twitter]', editForm.socialLinks.twitter || '');
+        formData.append('socialLinks[website]', editForm.socialLinks.website || '');
+      }
 
-      if (typeof editForm.profileImage === 'object' && editForm.profileImage instanceof File) {
-        formData.append('image', editForm.profileImage);
+      // Append profile image file if a new file was selected
+      if (editForm.profileImageFile) {
+        formData.append('image', editForm.profileImageFile);
       }
 
       const res = await authAPI.updateProfile(formData);
@@ -125,6 +150,12 @@ const Profile = () => {
       setProfile({
         ...updated,
         profileImage: updated.profileImage?.url || updated.profileImage || null,
+        socialLinks: updated.socialLinks || { linkedin: '', github: '', twitter: '', website: '' }
+      });
+      setEditForm({
+        ...updated,
+        profileImage: updated.profileImage?.url || updated.profileImage || null,
+        socialLinks: updated.socialLinks || { linkedin: '', github: '', twitter: '', website: '' }
       });
       setIsEditing(false);
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
@@ -204,34 +235,44 @@ const Profile = () => {
                 )}
               </div>
               <div className="flex-1">
-                <h2 className="text-2xl font-bold text-gray-900">{profile.name}</h2>
-                <p className="text-gray-600">{profile.position} at {profile.currentCompany}</p>
-                <p className="text-gray-500">{profile.location}</p>
+                <h2 className="text-2xl font-bold text-gray-900">{profile.name || 'Alumni Member'}</h2>
+                <p className="text-gray-600">{profile.major || 'Major not specified'}</p>
+                {profile.graduationYear && (
+                  <p className="text-gray-500">Class of {profile.graduationYear}</p>
+                )}
+                {profile.location && (
+                  <p className="text-gray-500">{profile.location}</p>
+                )}
                 <div className="mt-4 flex space-x-4">
                   {!isEditing ? (
                     <>
                       <button 
                         onClick={() => setIsEditing(true)}
-                        className="btn btn-primary"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >
                         Edit Profile
                       </button>
-                      <button className="btn btn-secondary">
-                        View Public Profile
-                      </button>
+                      {user?.id && (
+                        <button 
+                          onClick={() => navigate(`/alumni/public/${user.id}`)}
+                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          View Public Profile
+                        </button>
+                      )}
                     </>
                   ) : (
                     <>
                       <button 
                         onClick={handleSave}
                         disabled={saving}
-                        className="btn btn-success"
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                       >
                         {saving ? 'Saving...' : 'Save Changes'}
                       </button>
                       <button 
                         onClick={handleCancel}
-                        className="btn btn-secondary"
+                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                       >
                         Cancel
                       </button>
@@ -302,29 +343,16 @@ const Profile = () => {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Current Company</label>
+                    <label className="block text-sm font-medium text-gray-700">Phone</label>
                     {isEditing ? (
                       <input
-                        type="text"
-                        value={editForm.currentCompany}
-                        onChange={(e) => handleInputChange('currentCompany', e.target.value)}
+                        type="tel"
+                        value={editForm.phone}
+                        onChange={(e) => handleInputChange('phone', e.target.value)}
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (
-                      <p className="mt-1 text-sm text-gray-900">{profile.currentCompany}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Position</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editForm.position}
-                        onChange={(e) => handleInputChange('position', e.target.value)}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <p className="mt-1 text-sm text-gray-900">{profile.position}</p>
+                      <p className="mt-1 text-sm text-gray-900">{profile.phone || 'Not provided'}</p>
                     )}
                   </div>
                   <div>
@@ -334,10 +362,11 @@ const Profile = () => {
                         type="text"
                         value={editForm.location}
                         onChange={(e) => handleInputChange('location', e.target.value)}
+                        placeholder="City, State/Country"
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (
-                      <p className="mt-1 text-sm text-gray-900">{profile.location}</p>
+                      <p className="mt-1 text-sm text-gray-900">{profile.location || 'Not provided'}</p>
                     )}
                   </div>
                 </div>
@@ -357,28 +386,6 @@ const Profile = () => {
                   <p className="text-sm text-gray-700 mb-6">{profile.bio}</p>
                 )}
 
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Skills</h3>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editForm.skills.join(', ')}
-                    onChange={(e) => handleSkillsChange(e.target.value)}
-                    placeholder="Enter skills separated by commas"
-                    className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                ) : (
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {profile.skills.map((skill, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Social Links</h3>
                 <div className="space-y-3">
                   <div>
@@ -386,19 +393,24 @@ const Profile = () => {
                     {isEditing ? (
                       <input
                         type="url"
-                        value={editForm.socialLinks.linkedin}
+                        value={editForm.socialLinks.linkedin || ''}
                         onChange={(e) => handleSocialLinkChange('linkedin', e.target.value)}
+                        placeholder="https://linkedin.com/in/username"
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (
-                      <a 
-                        href={profile.socialLinks.linkedin} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="mt-1 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        {profile.socialLinks.linkedin}
-                      </a>
+                      profile.socialLinks?.linkedin ? (
+                        <a 
+                          href={profile.socialLinks.linkedin} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.linkedin}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
                     )}
                   </div>
                   <div>
@@ -406,19 +418,24 @@ const Profile = () => {
                     {isEditing ? (
                       <input
                         type="url"
-                        value={editForm.socialLinks.github}
+                        value={editForm.socialLinks.github || ''}
                         onChange={(e) => handleSocialLinkChange('github', e.target.value)}
+                        placeholder="https://github.com/username"
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (
-                      <a 
-                        href={profile.socialLinks.github} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="mt-1 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        {profile.socialLinks.github}
-                      </a>
+                      profile.socialLinks?.github ? (
+                        <a 
+                          href={profile.socialLinks.github} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.github}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
                     )}
                   </div>
                   <div>
@@ -426,19 +443,49 @@ const Profile = () => {
                     {isEditing ? (
                       <input
                         type="url"
-                        value={editForm.socialLinks.twitter}
+                        value={editForm.socialLinks.twitter || ''}
                         onChange={(e) => handleSocialLinkChange('twitter', e.target.value)}
+                        placeholder="https://twitter.com/username"
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (
-                      <a 
-                        href={profile.socialLinks.twitter} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="mt-1 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        {profile.socialLinks.twitter}
-                      </a>
+                      profile.socialLinks?.twitter ? (
+                        <a 
+                          href={profile.socialLinks.twitter} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.twitter}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Website</label>
+                    {isEditing ? (
+                      <input
+                        type="url"
+                        value={editForm.socialLinks.website || ''}
+                        onChange={(e) => handleSocialLinkChange('website', e.target.value)}
+                        placeholder="https://yourwebsite.com"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    ) : (
+                      profile.socialLinks?.website ? (
+                        <a 
+                          href={profile.socialLinks.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.website}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
                     )}
                   </div>
                 </div>

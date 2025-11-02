@@ -1,19 +1,197 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import useAuthStore from '../../store/authStore';
+import { authAPI } from '../../utils/api';
 
 const Profile = () => {
-  const profile = {
-    name: 'Alice Johnson',
-    email: 'alice.johnson@student.edu',
-    studentId: 'STU2024001',
-    year: '3rd Year',
-    major: 'Computer Science',
-    minor: 'Mathematics',
-    gpa: '3.8',
-    expectedGraduation: '2025',
-    bio: 'Passionate about software development and machine learning. Looking forward to connecting with alumni for mentorship opportunities.',
-    skills: ['Python', 'Java', 'React', 'Machine Learning', 'Data Structures'],
-    interests: ['Web Development', 'AI/ML', 'Cybersecurity', 'Open Source']
+  const { user, isAuthenticated, updateProfile: updateProfileStore } = useAuthStore();
+  const navigate = useNavigate();
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+
+  const [profile, setProfile] = useState({
+    name: '',
+    email: '',
+    graduationYear: '',
+    major: '',
+    location: '',
+    bio: '',
+    phone: '',
+    socialLinks: { linkedin: '', github: '', twitter: '', website: '' },
+    profileImage: null
+  });
+
+  const [editForm, setEditForm] = useState({ ...profile });
+
+  // Load profile data
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    fetchProfileData();
+  }, [isAuthenticated, navigate]);
+
+  const fetchProfileData = async () => {
+    try {
+      setLoading(true);
+      const res = await authAPI.getMe();
+      const u = res.data || user;
+      if (u) {
+        setProfile({
+          name: u.name || '',
+          email: u.email || '',
+          graduationYear: u.graduationYear || '',
+          major: u.major || '',
+          location: u.location || '',
+          bio: u.bio || '',
+          phone: u.phone || '',
+          socialLinks: u.socialLinks || { linkedin: '', github: '', twitter: '', website: '' },
+          profileImage: u.profileImage?.url || null
+        });
+        setEditForm({
+          name: u.name || '',
+          email: u.email || '',
+          graduationYear: u.graduationYear || '',
+          major: u.major || '',
+          location: u.location || '',
+          bio: u.bio || '',
+          phone: u.phone || '',
+          socialLinks: u.socialLinks || { linkedin: '', github: '', twitter: '', website: '' },
+          profileImage: u.profileImage?.url || null
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      setMessage({ type: 'error', text: 'Failed to load profile data' });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Check if profile is complete
+  const isProfileComplete = () => {
+    return profile.name && profile.email && profile.graduationYear && profile.major;
+  };
+
+  // Handle form input changes
+  const handleInputChange = (field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Handle social links change
+  const handleSocialLinkChange = (platform, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      socialLinks: {
+        ...prev.socialLinks,
+        [platform]: value
+      }
+    }));
+  };
+
+  // Handle profile image upload
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'Please select an image file' });
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Image size must be less than 5MB' });
+      return;
+    }
+    
+    // Preview image
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setEditForm(prev => ({ ...prev, profileImageFile: file, profileImage: e.target.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Save profile changes
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setMessage({ type: '', text: '' });
+      
+      const formData = new FormData();
+      formData.append('name', editForm.name || '');
+      formData.append('email', editForm.email || '');
+      if (editForm.graduationYear) formData.append('graduationYear', editForm.graduationYear);
+      if (editForm.major) formData.append('major', editForm.major);
+      if (editForm.location) formData.append('location', editForm.location);
+      if (editForm.bio) formData.append('bio', editForm.bio);
+      if (editForm.phone) formData.append('phone', editForm.phone);
+      
+      // Append social links
+      if (editForm.socialLinks) {
+        formData.append('socialLinks[linkedin]', editForm.socialLinks.linkedin || '');
+        formData.append('socialLinks[github]', editForm.socialLinks.github || '');
+        formData.append('socialLinks[twitter]', editForm.socialLinks.twitter || '');
+        formData.append('socialLinks[website]', editForm.socialLinks.website || '');
+      }
+
+      // Append profile image file if a new file was selected
+      if (editForm.profileImageFile) {
+        formData.append('image', editForm.profileImageFile);
+      }
+
+      const res = await authAPI.updateProfile(formData);
+      const updated = res.data?.user || editForm;
+      setProfile({
+        ...updated,
+        profileImage: updated.profileImage?.url || updated.profileImage || null,
+        socialLinks: updated.socialLinks || { linkedin: '', github: '', twitter: '', website: '' }
+      });
+      setEditForm({
+        ...updated,
+        profileImage: updated.profileImage?.url || updated.profileImage || null,
+        socialLinks: updated.socialLinks || { linkedin: '', github: '', twitter: '', website: '' }
+      });
+      setIsEditing(false);
+      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      
+      // Update auth store
+      await updateProfileStore(formData);
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to save profile changes' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Cancel editing
+  const handleCancel = () => {
+    setEditForm({ ...profile });
+    setIsEditing(false);
+    setMessage({ type: '', text: '' });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-200 border-t-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -23,28 +201,95 @@ const Profile = () => {
           <p className="text-gray-600 mt-2">Manage your student profile and information</p>
         </div>
 
+        {/* Incomplete Profile Warning */}
+        {!isProfileComplete() && !isEditing && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
+            <p className="font-medium">⚠️ Please complete your profile</p>
+            <p className="text-sm mt-1">Add your name, email, graduation year, and major to complete your profile.</p>
+          </div>
+        )}
+
+        {/* Success/Error Messages */}
+        {message.text && (
+          <div className={`mb-6 p-4 rounded-lg ${
+            message.type === 'success' 
+              ? 'bg-green-50 border border-green-200 text-green-800' 
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
         <div className="bg-white rounded-lg shadow">
           {/* Profile Header */}
           <div className="p-8 border-b border-gray-200">
             <div className="flex items-center space-x-6">
               <div className="flex-shrink-0">
-                <div className="h-24 w-24 rounded-full bg-green-600 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">
-                    {profile.name.split(' ').map(n => n[0]).join('')}
-                  </span>
-                </div>
+                {editForm.profileImage ? (
+                  <img 
+                    src={editForm.profileImage} 
+                    alt="Profile" 
+                    className="h-24 w-24 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-24 w-24 rounded-full bg-green-600 flex items-center justify-center">
+                    <span className="text-2xl font-bold text-white">
+                      {profile.name.split(' ').map(n => n[0]).join('').toUpperCase() || 'S'}
+                    </span>
+                  </div>
+                )}
+                {isEditing && (
+                  <div className="mt-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="text-sm text-gray-600"
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex-1">
-                <h2 className="text-2xl font-bold text-gray-900">{profile.name}</h2>
-                <p className="text-gray-600">{profile.year} • {profile.major}</p>
-                <p className="text-gray-500">Student ID: {profile.studentId}</p>
+                <h2 className="text-2xl font-bold text-gray-900">{profile.name || 'Student'}</h2>
+                <p className="text-gray-600">{profile.major || 'Major not specified'}</p>
+                {profile.graduationYear && (
+                  <p className="text-gray-500">Class of {profile.graduationYear}</p>
+                )}
                 <div className="mt-4 flex space-x-4">
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                    Edit Profile
-                  </button>
-                  <button className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-                    View Public Profile
-                  </button>
+                  {!isEditing ? (
+                    <>
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Edit Profile
+                      </button>
+                      {user?.id && (
+                        <button 
+                          onClick={() => navigate(`/student/public/${user.id}`)}
+                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          View Public Profile
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                      >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                      </button>
+                      <button 
+                        onClick={handleCancel}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -59,66 +304,203 @@ const Profile = () => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.name}</p>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editForm.name}
+                        onChange={(e) => handleInputChange('name', e.target.value)}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{profile.name || 'Not provided'}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.email}</p>
+                    {isEditing ? (
+                      <input
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{profile.email || 'Not provided'}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Student ID</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.studentId}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Year</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.year}</p>
+                    <label className="block text-sm font-medium text-gray-700">Graduation Year</label>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        value={editForm.graduationYear}
+                        onChange={(e) => handleInputChange('graduationYear', parseInt(e.target.value))}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{profile.graduationYear || 'Not provided'}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Major</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.major}</p>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editForm.major}
+                        onChange={(e) => handleInputChange('major', e.target.value)}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{profile.major || 'Not provided'}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Minor</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.minor}</p>
+                    <label className="block text-sm font-medium text-gray-700">Phone</label>
+                    {isEditing ? (
+                      <input
+                        type="tel"
+                        value={editForm.phone}
+                        onChange={(e) => handleInputChange('phone', e.target.value)}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{profile.phone || 'Not provided'}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">GPA</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.gpa}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Expected Graduation</label>
-                    <p className="mt-1 text-sm text-gray-900">{profile.expectedGraduation}</p>
+                    <label className="block text-sm font-medium text-gray-700">Location</label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editForm.location}
+                        onChange={(e) => handleInputChange('location', e.target.value)}
+                        placeholder="City, State/Country"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{profile.location || 'Not provided'}</p>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Bio and Skills */}
+              {/* Bio and Social Links */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Bio</h3>
-                <p className="text-sm text-gray-700 mb-6">{profile.bio}</p>
+                {isEditing ? (
+                  <textarea
+                    value={editForm.bio}
+                    onChange={(e) => handleInputChange('bio', e.target.value)}
+                    rows={4}
+                    placeholder="Tell us about yourself..."
+                    className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 mb-6"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 mb-6">{profile.bio || 'No bio provided'}</p>
+                )}
 
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Technical Skills</h3>
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {profile.skills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Areas of Interest</h3>
-                <div className="flex flex-wrap gap-2">
-                  {profile.interests.map((interest) => (
-                    <span
-                      key={interest}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
-                    >
-                      {interest}
-                    </span>
-                  ))}
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Social Links</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">LinkedIn</label>
+                    {isEditing ? (
+                      <input
+                        type="url"
+                        value={editForm.socialLinks.linkedin || ''}
+                        onChange={(e) => handleSocialLinkChange('linkedin', e.target.value)}
+                        placeholder="https://linkedin.com/in/username"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      profile.socialLinks?.linkedin ? (
+                        <a 
+                          href={profile.socialLinks.linkedin} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.linkedin}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">GitHub</label>
+                    {isEditing ? (
+                      <input
+                        type="url"
+                        value={editForm.socialLinks.github || ''}
+                        onChange={(e) => handleSocialLinkChange('github', e.target.value)}
+                        placeholder="https://github.com/username"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      profile.socialLinks?.github ? (
+                        <a 
+                          href={profile.socialLinks.github} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.github}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Twitter</label>
+                    {isEditing ? (
+                      <input
+                        type="url"
+                        value={editForm.socialLinks.twitter || ''}
+                        onChange={(e) => handleSocialLinkChange('twitter', e.target.value)}
+                        placeholder="https://twitter.com/username"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      profile.socialLinks?.twitter ? (
+                        <a 
+                          href={profile.socialLinks.twitter} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.twitter}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Website</label>
+                    {isEditing ? (
+                      <input
+                        type="url"
+                        value={editForm.socialLinks.website || ''}
+                        onChange={(e) => handleSocialLinkChange('website', e.target.value)}
+                        placeholder="https://yourwebsite.com"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    ) : (
+                      profile.socialLinks?.website ? (
+                        <a 
+                          href={profile.socialLinks.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {profile.socialLinks.website}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Not provided</p>
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

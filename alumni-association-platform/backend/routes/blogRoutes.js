@@ -22,10 +22,7 @@ const { validateObjectIdParams } = require('../middlewares/validation');
 router.get('/', getAllBlogs);
 router.get('/featured', getFeaturedBlogs);
 router.get('/search', searchBlogs);
-<<<<<<< HEAD
-=======
 router.get('/:id', validateObjectIdParams('id'), getBlogById);
->>>>>>> 03b7d11 (workshop page debug done)
 
 // Protected routes
 router.use(protect);
@@ -41,8 +38,5 @@ router.post('/:id/like', validateObjectIdParams('id'), toggleLike);
 router.post('/:id/comments', validateObjectIdParams('id'), addComment);
 router.post('/:id/comments/:commentId/replies', validateObjectIdParams('id', 'commentId'), addReply);
 router.put('/:id/comments/:commentId', validateObjectIdParams('id', 'commentId'), updateComment);
-
-// Public route with param should be last to avoid shadowing specific paths
-router.get('/:id', getBlogById);
 
 module.exports = router;

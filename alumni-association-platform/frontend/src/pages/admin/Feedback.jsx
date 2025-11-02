@@ -4,39 +4,97 @@ import socketService from '../../utils/socket';
 import useAuthStore from '../../store/authStore';
 
 const Feedback = () => {
+  const { token } = useAuthStore();
   const [feedbacks, setFeedbacks] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
 
-  const load = async () => {
+  useEffect(() => {
+    loadFeedbacks();
+    loadSummary();
+  }, [statusFilter, categoryFilter]);
+
+  useEffect(() => {
+    if (token) {
+      socketService.connect(token);
+      const refresh = () => {
+        loadFeedbacks();
+        loadSummary();
+      };
+      socketService.onEntityCreated('feedback', refresh);
+      socketService.onEntityUpdated('feedback', refresh);
+      socketService.onEntityDeleted('feedback', refresh);
+      return () => {
+        socketService.removeListener('feedback:created');
+        socketService.removeListener('feedback:updated');
+        socketService.removeListener('feedback:deleted');
+      };
+    }
+  }, [token]);
+
+  const loadFeedbacks = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await feedbackAPI.getAllFeedback();
+      const params = {};
+      if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
+      if (categoryFilter !== 'all') {
+        params.category = categoryFilter;
+      }
+      const res = await feedbackAPI.getAllFeedback(params);
       setFeedbacks(res.data?.feedback || res.data || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load feedback');
+      console.error('Load feedback error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const { token } = useAuthStore();
+  const loadSummary = async () => {
+    try {
+      const res = await feedbackAPI.getFeedbackSummary();
+      setSummary(res.data);
+    } catch (err) {
+      console.error('Load summary error:', err);
+    }
+  };
 
-  useEffect(() => { load(); }, []);
+  const updateStatus = async (feedbackId, newStatus) => {
+    try {
+      setLoading(true);
+      await feedbackAPI.updateFeedbackStatus(feedbackId, newStatus);
+      alert(`Feedback status updated to ${newStatus}`);
+      await loadFeedbacks();
+      await loadSummary();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update status');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  useEffect(() => {
-    socketService.connect(token);
-    const refresh = () => load();
-    socketService.onEntityCreated('feedback', refresh);
-    socketService.onEntityUpdated('feedback', refresh);
-    socketService.onEntityDeleted('feedback', refresh);
-    return () => {
-      socketService.removeListener('feedback:created');
-      socketService.removeListener('feedback:updated');
-      socketService.removeListener('feedback:deleted');
-    };
-  }, [token]);
+  const deleteFeedback = async (id) => {
+    if (!confirm('Are you sure you want to delete this feedback? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      setLoading(true);
+      await feedbackAPI.deleteFeedback(id);
+      alert('Feedback deleted successfully');
+      setFeedbacks(prev => prev.filter(f => f._id !== id));
+      await loadSummary();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete feedback');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -46,119 +104,164 @@ const Feedback = () => {
         return 'bg-yellow-100 text-yellow-800';
       case 'Resolved':
         return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-gray-100 text-gray-800';
+      case 'reviewed':
+        return 'bg-purple-100 text-purple-800';
+      case 'addressed':
+        return 'bg-indigo-100 text-indigo-800';
+      case 'closed':
+        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const renderStars = (rating) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <svg
-        key={i}
-        className={`w-4 h-4 ${i < rating ? 'text-yellow-400' : 'text-gray-300'}`}
-        fill="currentColor"
-        viewBox="0 0 20 20"
-      >
-        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-      </svg>
-    ));
-  };
-
-  const markResolved = async (id) => {
-    try {
-      await feedbackAPI.updateFeedbackStatus(id, 'resolved');
-      await load();
-    } catch (err) {
-      alert('Failed to update status');
-    }
-  };
-
-  const deleteFeedback = async (id) => {
-    if (!confirm('Delete this feedback?')) return;
-    try {
-      await feedbackAPI.deleteFeedback(id);
-      setFeedbacks(prev => prev.filter(f => f._id !== id));
-    } catch (err) {
-      alert('Failed to delete');
-    }
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-6 pt-24">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Feedback Management</h1>
           <p className="text-gray-600 mt-2">Review and manage user feedback</p>
         </div>
 
+        {/* Summary Statistics */}
+        {summary && (
+          <div className="mb-8 bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Feedback Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{summary.total || 0}</div>
+                <div className="text-sm text-gray-600">Total Feedback</div>
+              </div>
+              <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                <div className="text-2xl font-bold text-yellow-600">{summary.new || 0}</div>
+                <div className="text-sm text-gray-600">New</div>
+              </div>
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">{summary.inProgress || 0}</div>
+                <div className="text-sm text-gray-600">In Progress</div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{summary.resolved || 0}</div>
+                <div className="text-sm text-gray-600">Resolved</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="mb-6 flex gap-4">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Statuses</option>
+            <option value="New">New</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+            <option value="pending">Pending (Legacy)</option>
+          </select>
+
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Categories</option>
+            <option value="general">General</option>
+            <option value="technical">Technical</option>
+            <option value="content">Content</option>
+            <option value="user-experience">User Experience</option>
+            <option value="support">Support</option>
+            <option value="suggestion">Suggestion</option>
+          </select>
+        </div>
+
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">{error}</div>
         )}
 
-        <div className="grid gap-6">
-          {loading ? (
-            <div className="text-gray-500">Loading...</div>
+        {/* Feedback List */}
+        <div className="space-y-4">
+          {loading && feedbacks.length === 0 ? (
+            <div className="text-gray-500 bg-white rounded-lg shadow p-8 text-center">Loading...</div>
           ) : feedbacks.length === 0 ? (
-            <div className="text-gray-500">No feedback yet</div>
-          ) : feedbacks.map((feedback) => (
-            <div key={feedback._id} className="bg-white rounded-lg shadow p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">{feedback.subject || 'Feedback'}</h3>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(feedback.status || 'New')}`}>
-                      {feedback.status}
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-3">{feedback.message}</p>
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <span>From: {feedback.user?.name || 'User'}</span>
-                    <span>Email: {feedback.user?.email || '-'}</span>
-                    <span>Date: {new Date(feedback.createdAt).toLocaleDateString()}</span>
+            <div className="text-gray-500 bg-white rounded-lg shadow p-8 text-center">
+              No feedback found
+              {(statusFilter !== 'all' || categoryFilter !== 'all') && (
+                <p className="text-sm mt-2">Try adjusting your filters</p>
+              )}
+            </div>
+          ) : (
+            feedbacks.map((feedback) => (
+              <div key={feedback._id} className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900 capitalize">
+                        {feedback.category?.replace('-', ' ') || 'Feedback'}
+                      </h3>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(feedback.status || 'New')}`}>
+                        {feedback.status || 'New'}
+                      </span>
+                    </div>
+                    <p className="text-gray-700 mb-3 whitespace-pre-wrap">
+                      {feedback.comments || feedback.message || 'No message'}
+                    </p>
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <span>From: {feedback.user?.name || 'Unknown User'}</span>
+                      <span>Email: {feedback.user?.email || '-'}</span>
+                      <span>Date: {formatDate(feedback.createdAt)}</span>
+                      {feedback.rating && (
+                        <span>Rating: {feedback.rating}/5 ⭐</span>
+                      )}
+                    </div>
+                    {feedback.adminResponse?.response && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 bg-blue-50 p-3 rounded">
+                        <p className="text-sm font-medium text-gray-700 mb-1">Admin Response:</p>
+                        <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                          {feedback.adminResponse.response}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="ml-4">
-                  <div className="flex items-center space-x-1">
-                    {renderStars(feedback.rating || 0)}
-                  </div>
+                
+                <div className="flex justify-end items-center space-x-2 pt-4 border-t border-gray-200">
+                  <select
+                    value={feedback.status || 'New'}
+                    onChange={(e) => updateStatus(feedback._id, e.target.value)}
+                    disabled={loading}
+                    className="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    <option value="New">New</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                  <button
+                    onClick={() => deleteFeedback(feedback._id)}
+                    disabled={loading}
+                    className="text-red-600 hover:text-red-900 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
-              
-              <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200">
-                <button className="text-blue-600 hover:text-blue-900 text-sm font-medium">
-                  Reply
-                </button>
-                <button onClick={() => markResolved(feedback._id)} className="text-green-600 hover:text-green-900 text-sm font-medium">
-                  Mark Resolved
-                </button>
-                <button onClick={() => deleteFeedback(feedback._id)} className="text-red-600 hover:text-red-900 text-sm font-medium">
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Feedback Summary</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">25</div>
-              <div className="text-sm text-gray-600">Total Feedback</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">8</div>
-              <div className="text-sm text-gray-600">New</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">5</div>
-              <div className="text-sm text-gray-600">In Progress</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">12</div>
-              <div className="text-sm text-gray-600">Resolved</div>
-            </div>
-          </div>
+            ))
+          )}
         </div>
       </div>
     </div>

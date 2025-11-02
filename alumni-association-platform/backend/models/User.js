@@ -76,8 +76,7 @@ userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+    this.password = await bcrypt.hash(this.password, 10);
     next();
   } catch (error) {
     next(error);
@@ -89,8 +88,6 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
- 
 // Realtime emit hooks (fallback when change streams unavailable)
 userSchema.post('save', function(doc) {
   const io = getIO();
@@ -110,3 +107,6 @@ userSchema.post('findOneAndDelete', function(result) {
   if (!io) return;
   if (result) io.emit('users:deleted', { _id: result._id });
 });
+
+// Export clean Mongoose model
+module.exports = mongoose.model('User', userSchema);
