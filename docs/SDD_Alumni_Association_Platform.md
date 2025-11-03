@@ -29,20 +29,20 @@ This SDD covers architecture, module designs, data flows, database schema, API d
 ### High-level architecture diagram
 ```mermaid
 flowchart LR
-  subgraph Frontend (React + Tailwind)
+  subgraph Frontend_React_Tailwind
     UI[Role-based Dashboards]
     Router[React Router]
-    State[State Mgmt (Context/Redux)]
+    State[State Mgmt - Context/Redux]
   end
 
-  subgraph Backend (Node + Express)
+  subgraph Backend_Node_Express
     Auth[Auth & RBAC Middleware]
     Controllers[REST Controllers]
     Services[Domain Services]
-    Repos[Data Access (Mongoose)]
+    Repos[Data Access - Mongoose]
   end
 
-  subgraph MongoDB Atlas
+  subgraph MongoDB_Atlas
     Users[(users)]
     Jobs[(jobs)]
     Mentorships[(mentorships)]
@@ -52,11 +52,12 @@ flowchart LR
   end
 
   UI -->|HTTPS JSON| Router
-  Router --> Backend (Node + Express)
-  Backend (Node + Express) --> MongoDB Atlas
+  Router --> Backend_Node_Express
+  Backend_Node_Express --> MongoDB_Atlas
   Auth --- Controllers
   Controllers --- Services
   Services --- Repos
+
 ```
 
 ### API communication flow
@@ -188,25 +189,27 @@ Mentorship request approval
 ```mermaid
 sequenceDiagram
   participant St as Student
-  participant API as Express
+  participant API as Express API
   participant MS as Mentorship Service
   participant DB as MongoDB
+  participant Al as Alumni
+
   St->>API: POST /api/mentorship/request {programId}
   API->>API: Verify JWT + Role Student
   API->>MS: createRequest(programId, studentId)
-  MS->>DB: insert request (pending)
-  DB-->MS: ok
-  MS-->API: ok
-  API-->>St: 201
+  MS->>DB: Insert request (status: pending)
+  DB-->>MS: Success
+  MS-->>API: Request Created
+  API-->>St: 201 Created Response
 
-  participant Al as Alumni
   Al->>API: POST /api/mentorship/requests/:id/approve
-  API->>API: Verify JWT + Role Alumni + owns program
+  API->>API: Verify JWT + Role Alumni + Program Ownership
   API->>MS: approveRequest(requestId)
-  MS->>DB: update request status=approved; link relationship
-  DB-->MS: ok
-  MS-->API: ok
-  API-->Al: 200
+  MS->>DB: Update request status → approved
+  DB-->>MS: Update Success
+  MS-->>API: Approval Confirmed
+  API-->>Al: 200 OK Response
+
 ```
 
 ### Functional modules
