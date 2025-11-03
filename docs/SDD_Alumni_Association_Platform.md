@@ -135,8 +135,8 @@ flowchart LR
     J3[View Jobs/Apply] --> J4[Applications Persist/Notify]
   end
   subgraph Mentorship
-    M1[Create Program] --> M2[Persist Program]
-    M3[Request/Approve/Reject] --> M4[Relationship Persist]
+    M1[Create/Approve/Reject Program] --> M2[Persist Program]
+    M3[Request] --> M4[Relationship Persist]
   end
   subgraph Content
     W1[Workshops/Blogs CRUD] --> W2[Persist Content]
