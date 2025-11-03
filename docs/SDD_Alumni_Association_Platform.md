@@ -127,7 +127,7 @@ flowchart LR
 Level 1 (Key flows)
 ```mermaid
 flowchart LR
-  subgraph Auth
+  subgraph Auth 
     A1[Login/Signup] --> A2[JWT Issue]
   end
   subgraph Jobs
@@ -159,6 +159,51 @@ flowchart LR
   Auth --> Workshop
   Auth --> Blog
   Auth --> Announcements
+```
+Level 1 (Key flows)
+```mermaid
+flowchart LR
+  %% === AUTH MODULE ===
+  subgraph "Auth"
+    direction TB
+    A1["Login / Signup (All Roles)"] --> A2["JWT Issue (All Roles)"]
+  end
+
+  %% === JOBS MODULE ===
+  subgraph "Jobs"
+    J1["Create / Edit / Delete Jobs (Alumni)"] --> J2["Persist Jobs (Alumni)"]
+    J3["View Jobs / Apply (Student)"] --> J4["Applications Persist / Notify (Student)"]
+  end
+
+  %% === MENTORSHIP MODULE ===
+  subgraph "Mentorship"
+    M1["Create / Approve / Reject Program (Alumni)"] --> M2["Persist Program (Alumni)"]
+    M3["Request Mentorship (Student)"] --> M4["Relationship Persist (Student)"]
+  end
+
+  %% === WORKSHOP MODULE ===
+  subgraph "Workshop"
+    B1["Workshops CRUD (Alumni)"] --> B2["Persist Workshop (Alumni)"]
+    B3["Apply for Workshop (Student)"] --> B4["Persist Application (Student)"]
+  end
+
+  %% === BLOG MODULE ===
+  subgraph "Blog"
+    K1["Blog CRUD (Alumni)"] --> K2["Persist Content (Alumni)"]
+    K3["Comment on Blog (Student)"] --> K4["Persist Comment (Student)"]
+  end
+
+%% === ANNOUNCEMENTS MODULE ===
+subgraph Announcements
+  N1["Post Announcements (Admin)"] --> N2["Persist / Notify (Admin)"]
+end
+
+Auth --> Jobs
+Auth --> Mentorship
+Auth --> Workshop
+Auth --> Blog
+Auth --> Announcements
+
 ```
 
 Level 2 (Example: Job Apply)
