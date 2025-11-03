@@ -29,20 +29,20 @@ This SDD covers architecture, module designs, data flows, database schema, API d
 ### High-level architecture diagram
 ```mermaid
 flowchart LR
-  subgraph Client[Frontend (React + Tailwind)]
+  subgraph Frontend (React + Tailwind)
     UI[Role-based Dashboards]
     Router[React Router]
     State[State Mgmt (Context/Redux)]
   end
 
-  subgraph Server[Backend (Node + Express)]
+  subgraph Backend (Node + Express)
     Auth[Auth & RBAC Middleware]
     Controllers[REST Controllers]
     Services[Domain Services]
     Repos[Data Access (Mongoose)]
   end
 
-  subgraph DB[(MongoDB Atlas)]
+  subgraph MongoDB Atlas
     Users[(users)]
     Jobs[(jobs)]
     Mentorships[(mentorships)]
@@ -51,10 +51,12 @@ flowchart LR
     Announcements[(announcements)]
   end
 
-  UI -->|HTTPS JSON| Router --> Server
-  Server --> DB
+  UI -->|HTTPS JSON| Router
+  Router --> Backend (Node + Express)
+  Backend (Node + Express) --> MongoDB Atlas
   Auth --- Controllers
-  Controllers --- Services --- Repos
+  Controllers --- Services
+  Services --- Repos
 ```
 
 ### API communication flow
@@ -91,13 +93,20 @@ graph TD
   G -->|/api/announcements| U[Announcements Controller]
   H -->|/api/admin, metrics| T[Admin Controller]
 
-  X --> S[Auth Service] --> R[Mongoose Models]
-  Y --> Q[Jobs Service] --> R
-  Z --> P[Mentorship Service] --> R
-  W --> O[Workshops Service] --> R
-  V --> N[Blogs Service] --> R
-  U --> M[Announcements Service] --> R
-  T --> L[Metrics/Reporting Service] --> R
+  X --> S[Auth Service]
+  S --> R[Mongoose Models]
+  Y --> Q[Jobs Service]
+  Q --> R
+  Z --> P[Mentorship Service]
+  P --> R
+  W --> O[Workshops Service]
+  O --> R
+  V --> N[Blogs Service]
+  N --> R
+  U --> M[Announcements Service]
+  M --> R
+  T --> L[Metrics/Reporting Service]
+  L --> R
 ```
 
 ---
@@ -152,9 +161,9 @@ sequenceDiagram
   API->>API: Verify JWT + Role Student
   API->>JOB: validate job & user eligibility
   JOB->>DB: upsert application into job.applications
-  DB-->>JOB: ok
-  JOB-->>API: application created
-  API-->>S: 201 {applicationId, status:"submitted"}
+  DB-->JOB: ok
+  JOB-->API: application created
+  API-->S: 201 {applicationId, status:"submitted"}
 ```
 
 ### Sequence diagrams (critical interactions)
@@ -170,9 +179,9 @@ sequenceDiagram
   API->>API: Verify JWT + Role Alumni
   API->>SVC: createJob(payload, alumniId)
   SVC->>DB: insert jobs doc with ownerId=alumniId
-  DB-->>SVC: new jobId
-  SVC-->>API: {jobId}
-  API-->>A: 201 Created
+  DB-->SVC: new jobId
+  SVC-->API: {jobId}
+  API-->A: 201 Created
 ```
 
 Mentorship request approval
@@ -186,8 +195,8 @@ sequenceDiagram
   API->>API: Verify JWT + Role Student
   API->>MS: createRequest(programId, studentId)
   MS->>DB: insert request (pending)
-  DB-->>MS: ok
-  MS-->>API: ok
+  DB-->MS: ok
+  MS-->API: ok
   API-->>St: 201
 
   participant Al as Alumni
@@ -195,9 +204,9 @@ sequenceDiagram
   API->>API: Verify JWT + Role Alumni + owns program
   API->>MS: approveRequest(requestId)
   MS->>DB: update request status=approved; link relationship
-  DB-->>MS: ok
-  MS-->>API: ok
-  API-->>Al: 200
+  DB-->MS: ok
+  MS-->API: ok
+  API-->Al: 200
 ```
 
 ### Functional modules
