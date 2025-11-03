@@ -232,7 +232,7 @@ sequenceDiagram
 erDiagram
   USERS {
     string _id
-    string role "ADMIN|ALUMNI|STUDENT"
+    string role
     string fullName
     string email
     string passwordHash
@@ -245,90 +245,86 @@ erDiagram
 
   JOBS {
     string _id
-    string ownerId FK -> USERS._id
+    string ownerId
     string title
     string company
     string location
     string type
     string description
-    string[] tags
-    Application[] applications
+    string tags
     date createdAt
     date updatedAt
   }
 
   Application {
     string _id
-    string studentId FK -> USERS._id
+    string studentId
     string resumeUrl
     string note
-    string status "submitted|reviewed|accepted|rejected|withdrawn"
+    string status
     date appliedAt
   }
 
   MENTORSHIPS {
     string _id
-    string ownerId FK -> USERS._id
+    string ownerId
     string title
-    string topics[]
+    string topics
     number capacity
     string description
-    Request[] requests
-    Relation[] relations
     date createdAt
     date updatedAt
   }
 
   Request {
     string _id
-    string studentId FK -> USERS._id
-    string status "pending|approved|rejected"
+    string studentId
+    string status
     date requestedAt
     string note
   }
 
   Relation {
     string _id
-    string studentId FK -> USERS._id
+    string studentId
     date startedAt
     date endedAt
-    string status "active|completed|terminated"
+    string status
   }
 
   WORKSHOPS {
     string _id
-    string ownerId FK -> USERS._id
+    string ownerId
     string title
     string description
     date startAt
     date endAt
     number capacity
-    string[] attendeesIds
+    string attendeesIds
     date createdAt
     date updatedAt
   }
 
   BLOGS {
     string _id
-    string ownerId FK -> USERS._id
+    string ownerId
     string title
     string content
-    string[] tags
-    Comment[] comments
+    string tags
     date createdAt
     date updatedAt
   }
 
   Comment {
     string _id
-    string authorId FK -> USERS._id
+    string authorId
     string content
     date createdAt
   }
 
   ANNOUNCEMENTS {
     string _id
-    string authorId FK -> USERS._id
+    string authorId
     string title
     string content
     date publishAt
