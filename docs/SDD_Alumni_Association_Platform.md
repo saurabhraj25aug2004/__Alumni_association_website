@@ -138,16 +138,26 @@ flowchart LR
     M1[Create/Approve/Reject Program] --> M2[Persist Program]
     M3[Request] --> M4[Relationship Persist]
   end
-  subgraph Content
-    W1[Workshops/Blogs CRUD] --> W2[Persist Content]
-    W3[Comments] --> W4[Persist Comments]
+ %% subgraph Content
+  %%  W1[Workshops/Blogs CRUD] --> W2[Persist Content]
+   %% W3[Comments] --> W4[Persist Comments]
+ %% end
+  subgraph Workshop
+    B1[Workshops CRUD] --> B2[Persist Workshop]
+    B3[Apply] --> B4[Persist Application]
+  end
+  subgraph Blog
+    K1[Blog CRUD] --> K2[Persist Content]
+    K3[Comment] --> K4[Persist Comment]
   end
   subgraph Announcements
     N1[Post Announcements] --> N2[Persist/Notify]
   end
   Auth --> Jobs
   Auth --> Mentorship
-  Auth --> Content
+  %% Auth --> Content
+  Auth --> Workshop
+  Auth --> Blog
   Auth --> Announcements
 ```
 
