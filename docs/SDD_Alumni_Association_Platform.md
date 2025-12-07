@@ -875,7 +875,7 @@ POST /api/mentorship/request
 
 ---
 
-### RBAC matrix (summary)
+### RBAC matrix
 
 | Feature          | Student           | Alumni                            | Admin            |
 |------------------|-------------------|-----------------------------------|------------------|
@@ -890,5 +890,3 @@ POST /api/mentorship/request
 ---
 
 References: See `alumni-association-platform/FUNCTIONALITY_SUMMARY.md` for feature-by-feature implementation notes.
-
-
